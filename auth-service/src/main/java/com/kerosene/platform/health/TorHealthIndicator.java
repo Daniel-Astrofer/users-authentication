@@ -18,16 +18,22 @@ public class TorHealthIndicator implements HealthIndicator {
     private final Path socksPath;
     private final Path vanguardsStatePath;
     private final boolean required;
+    private final String socksHost;
+    private final int socksPort;
 
     public TorHealthIndicator(
             @Value("${tor.health.socks-path:/var/run/tor/socks/tor.sock}") String socksPath,
             @Value("${tor.health.vanguards-state-file:}") String vanguardsStatePath,
-            @Value("${tor.health.required:true}") boolean required) {
+            @Value("${tor.health.required:true}") boolean required,
+            @Value("${tor.health.socks-host:}") String socksHost,
+            @Value("${tor.health.socks-port:9050}") int socksPort) {
         this.socksPath = Path.of(socksPath);
         this.vanguardsStatePath = vanguardsStatePath == null || vanguardsStatePath.isBlank()
                 ? null
                 : Path.of(vanguardsStatePath);
         this.required = required;
+        this.socksHost = socksHost == null ? "" : socksHost.trim();
+        this.socksPort = socksPort;
     }
 
     @Override
@@ -45,7 +51,10 @@ public class TorHealthIndicator implements HealthIndicator {
             return builder.build();
         }
 
-        boolean torSocketReady = Files.exists(socksPath) && Files.isReadable(socksPath);
+        boolean torSocketReady = socksHost.isBlank()
+                ? Files.exists(socksPath) && Files.isReadable(socksPath)
+                : tcpSocksReady();
+        if (!socksHost.isBlank()) details.put("torSocksHost", socksHost);
         details.put("torSocksPath", socksPath.toString());
         details.put("torSocksReady", torSocketReady);
 
@@ -63,12 +72,23 @@ public class TorHealthIndicator implements HealthIndicator {
         Health.Builder builder = torSocketReady && vanguardsReady ? Health.up() : Health.down();
         details.forEach(builder::withDetail);
         if (!torSocketReady) {
-            builder.withDetail("reason", "Tor SOCKS Unix socket missing or unreadable");
+            builder.withDetail("reason", "Tor SOCKS endpoint unavailable or invalid");
         }
         if (torSocketReady && !vanguardsReady) {
             builder.withDetail("reason", "Tor is up but Vanguards state is missing or unreadable");
         }
         return builder.build();
+    }
+
+    private boolean tcpSocksReady() {
+        try (var socket = new java.net.Socket()) {
+            socket.connect(new java.net.InetSocketAddress(socksHost, socksPort), 2000);
+            socket.setSoTimeout(2000);
+            socket.getOutputStream().write(new byte[] {5, 1, 0});
+            return socket.getInputStream().read() == 5 && socket.getInputStream().read() == 0;
+        } catch (IOException exception) {
+            return false;
+        }
     }
 
     private static long readFileSize(Path path) {

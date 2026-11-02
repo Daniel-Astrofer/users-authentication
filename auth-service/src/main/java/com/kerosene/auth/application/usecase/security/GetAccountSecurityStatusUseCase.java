@@ -11,15 +11,21 @@ public class GetAccountSecurityStatusUseCase {
     /** Domain service that assembles security readiness and status. */
     private final AccountSecurityStatusService accountSecurityStatusService;
 
-    /** Creates the account security status query. */
-    /** @param accountSecurityStatusService account security status service */
+    /**
+     * Creates the account security status query.
+     *
+     * @param accountSecurityStatusService service assembling the account's readiness projection
+     */
     public GetAccountSecurityStatusUseCase(AccountSecurityStatusService accountSecurityStatusService) {
         this.accountSecurityStatusService = accountSecurityStatusService;
     }
 
-    /** Delegates account status lookup to the security status service. */
-    /** @param userId account identifier */
-    /** @return security status projection */
+    /**
+     * Delegates account status lookup to the security status service.
+     *
+     * @param userId persisted account identifier
+     * @return security status projection
+     */
     public AccountSecurityStatusDTO execute(Long userId) {
         return accountSecurityStatusService.getStatus(userId);
     }

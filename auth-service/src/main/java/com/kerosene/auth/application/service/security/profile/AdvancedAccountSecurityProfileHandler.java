@@ -11,14 +11,20 @@ public class AdvancedAccountSecurityProfileHandler extends AbstractAccountSecuri
     /** Feature gate shared with other flows that expose advanced security modes. */
     private final AdvancedAccountSecurityAvailability availability;
 
-    /** Injects the authoritative feature availability check. */
-    /** @param availability advanced security feature gate */
+    /**
+     * Injects the authoritative feature availability check.
+     *
+     * @param availability feature gate shared by account profile and related security flows
+     */
     public AdvancedAccountSecurityProfileHandler(AdvancedAccountSecurityAvailability availability) {
         this.availability = availability;
     }
 
-    /** Verifies mode availability, then continues to the next profile handler. */
-    /** @param context current account profile */
+    /**
+     * Verifies mode availability, then continues to the next profile handler.
+     *
+     * @param context current account profile and resolved mode
+     */
     @Override
     public void handle(AccountSecurityProfileContext context) {
         availability.assertSupported(context.getSecurityType());

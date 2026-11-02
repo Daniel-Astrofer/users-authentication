@@ -94,13 +94,15 @@ public class FinishOnboardingDeviceKeyRegistrationUseCase {
         UserDataBase user = finalizeSignupAccount.execute(sessionId);
         persistDeviceKey(user, verified);
 
-        String token = user.getId() + " " + jwtServicer.generateToken(user.getId());
+        String token = user.getId() + " " + jwtServicer.generateTokenAtCredentialEpoch(user.getId(), java.util.List.of("USER"), user.getCredentialEpoch());
         return Result.created(token);
     }
 
-    /** Persists the verified public credential when it is not already stored for this user. */
-    /** @param user newly finalized owner of the credential */
-    /** @param verified cryptographically verified registration material and device metadata */
+    /**
+     * Persists the verified public credential when it is not already stored for this user.
+     * @param user newly finalized owner of the credential
+     * @param verified cryptographically verified registration material and device metadata
+     */
     private void persistDeviceKey(
             UserDataBase user,
             DeviceKeyService.VerifiedDeviceKeyRegistration verified) {
@@ -137,22 +139,28 @@ public class FinishOnboardingDeviceKeyRegistrationUseCase {
      */
     public record Result(Status status, String token, DeviceAlreadyBoundDTO deviceAlreadyBound) {
 
-        /** Builds the result containing the new account's session token. */
-        /** @param token legacy user-ID and JWT response string */
-        /** @return created result */
+        /**
+         * Builds the result containing the new account's session token.
+         * @param token legacy user-ID and JWT response string
+         * @return created result
+         */
         public static Result created(String token) {
             return new Result(Status.CREATED, token, null);
         }
 
-        /** Builds the result for missing or expired signup state. */
-        /** @return expired-session result without token or conflict payload */
+        /**
+         * Builds the result for missing or expired signup state.
+         * @return expired-session result without token or conflict payload
+         */
         public static Result sessionExpired() {
             return new Result(Status.SESSION_EXPIRED, null, null);
         }
 
-        /** Builds the result carrying device installation ownership conflict details. */
-        /** @param payload conflict information for the client confirmation flow */
-        /** @return device-bound conflict result */
+        /**
+         * Builds the result carrying device installation ownership conflict details.
+         * @param payload conflict information for the client confirmation flow
+         * @return device-bound conflict result
+         */
         public static Result deviceAlreadyBound(DeviceAlreadyBoundDTO payload) {
             return new Result(Status.DEVICE_ALREADY_BOUND, null, payload);
         }

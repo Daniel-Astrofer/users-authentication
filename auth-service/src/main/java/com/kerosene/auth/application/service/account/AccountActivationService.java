@@ -16,23 +16,34 @@ public class AccountActivationService {
     /** Account persistence boundary used for lookup and activation updates. */
     private final UserServiceContract userService;
 
-    /** Creates the activation service. */
-    /** @param userService user lookup and persistence boundary */
+    /**
+     * Creates the activation service.
+     *
+     * @param userService account lookup and persistence boundary used to read activation fields
+     */
     public AccountActivationService(UserServiceContract userService) {
         this.userService = userService;
     }
 
-    /** Loads account state and projects it into the activation response. */
-    /** @param userId account identifier */
-    /** @return activation status */
+    /**
+     * Loads account state and projects it into the activation response.
+     *
+     * @param userId persisted account identifier
+     * @return activation status derived from the persisted active flag and timestamp
+     * @throws AuthExceptions.InvalidCredentials when the account cannot be found
+     */
     public AccountActivationStatusDTO getStatus(Long userId) {
         UserDataBase user = requireUser(userId);
         return AccountActivationStatusDTO.from(new ActivationUserView(user));
     }
 
-    /** Returns current activation state; the link workflow currently reuses that state without creating a link. */
-    /** @param userId account identifier */
-    /** @return activation status */
+    /**
+     * Returns current activation state; this implementation does not create a payment link.
+     *
+     * @param userId persisted account identifier
+     * @return activation status with payment-link fields unset
+     * @throws AuthExceptions.InvalidCredentials when the account cannot be found
+     */
     @Transactional
     public AccountActivationStatusDTO createOrReuseLink(Long userId) {
         UserDataBase user = requireUser(userId);
@@ -55,9 +66,14 @@ public class AccountActivationService {
                 "O deposito inicial agora deve ser feito dentro da plataforma, nao por link de ativacao.");
     }
 
-    /** Marks the account active once and records its activation timestamp. */
-    /** @param userId account identifier */
-    /** @return active persisted account */
+    /**
+     * Marks the account active once and records its activation timestamp. Existing active accounts
+     * are returned without changing their original activation time.
+     *
+     * @param userId persisted account identifier
+     * @return active persisted account
+     * @throws AuthExceptions.InvalidCredentials when the account cannot be found
+     */
     @Transactional
     public UserDataBase activateUser(Long userId) {
         UserDataBase user = requireUser(userId);
@@ -69,16 +85,23 @@ public class AccountActivationService {
         return userService.createUserInDataBase(user);
     }
 
-    /** Ensures inbound operations are enabled for the account found by ID. */
-    /** @param userId account identifier */
-    /** @throws AuthExceptions.InboundReceivingBlockedException when the account is inactive */
+    /**
+     * Ensures inbound operations are enabled for the account found by ID.
+     *
+     * @param userId persisted account identifier
+     * @throws AuthExceptions.InvalidCredentials when the account cannot be found
+     * @throws AuthExceptions.InboundReceivingBlockedException when the account is inactive
+     */
     public void assertInboundEnabled(Long userId) {
         assertInboundEnabled(requireUser(userId));
     }
 
-    /** Rejects inbound operations unless the supplied account is active. */
-    /** @param user account to check */
-    /** @throws AuthExceptions.InboundReceivingBlockedException when the account is inactive */
+    /**
+     * Rejects inbound operations unless the supplied account is explicitly active.
+     *
+     * @param user account entity whose active flag gates inbound funding
+     * @throws AuthExceptions.InboundReceivingBlockedException when the account is inactive
+     */
     public void assertInboundEnabled(UserDataBase user) {
         if (!Boolean.TRUE.equals(user.getIsActive())) {
             throw new AuthExceptions.InboundReceivingBlockedException(
@@ -86,30 +109,39 @@ public class AccountActivationService {
         }
     }
 
-    /** Loads an account or rejects the request as unauthenticated/stale. */
-    /** @param userId account identifier */
-    /** @return persisted account entity */
-    /** @throws AuthExceptions.InvalidCredentials when the account cannot be found */
+    /**
+     * Loads an account or rejects the request as unauthenticated or based on stale identity.
+     *
+     * @param userId account identifier to resolve
+     * @return persisted account entity
+     * @throws AuthExceptions.InvalidCredentials when the account cannot be found
+     */
     private UserDataBase requireUser(Long userId) {
         return userService.buscarPorId(userId)
                 .orElseThrow(() -> new AuthExceptions.InvalidCredentials("Authenticated user not found."));
     }
 
-    /** Minimal adapter exposing activation fields from the user entity to the response projector. */
     /**
      * Minimal adapter exposing activation fields from the persisted user entity.
+     *
      * @param user source entity providing the activation values
      */
     private record ActivationUserView(UserDataBase user) implements AccountActivationStatusDTO.UserDataBaseView {
-        /** Reports active only for an explicit true value. */
-        /** @return account activity state */
+        /**
+         * Reports active only for an explicit true value; null is treated as inactive.
+         *
+         * @return account activity state
+         */
         @Override
         public boolean isActive() {
             return Boolean.TRUE.equals(user.getIsActive());
         }
 
-        /** Returns the persisted activation timestamp without synthesizing a value. */
-        /** @return activation time, or {@code null} when not active */
+        /**
+         * Returns the persisted activation timestamp without synthesizing a value.
+         *
+         * @return activation time, or {@code null} when not active
+         */
         @Override
         public LocalDateTime activatedAt() {
             return user.getActivatedAt();

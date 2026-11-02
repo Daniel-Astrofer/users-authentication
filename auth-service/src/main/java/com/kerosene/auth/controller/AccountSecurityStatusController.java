@@ -9,16 +9,28 @@ import com.kerosene.auth.application.usecase.security.GetAccountSecurityStatusUs
 import com.kerosene.auth.dto.AccountSecurityStatusDTO;
 import com.kerosene.common.dto.ApiResponse;
 
+/** Authenticated read-only endpoint for the account's consolidated security readiness summary. */
 @RestController
 @RequestMapping("/auth/security-status")
 public class AccountSecurityStatusController {
 
     private final GetAccountSecurityStatusUseCase getAccountSecurityStatusUseCase;
 
+    /**
+     * Creates the status endpoint with its query use case.
+     *
+     * @param getAccountSecurityStatusUseCase application query for account security state
+     */
     public AccountSecurityStatusController(GetAccountSecurityStatusUseCase getAccountSecurityStatusUseCase) {
         this.getAccountSecurityStatusUseCase = getAccountSecurityStatusUseCase;
     }
 
+    /**
+     * Returns security and recovery readiness for the authenticated principal.
+     *
+     * @param authentication authenticated Spring Security principal whose name contains the user ID
+     * @return consolidated password, passkey, TOTP, recovery-code, and activation state
+     */
     @GetMapping
     public ResponseEntity<ApiResponse<AccountSecurityStatusDTO>> getStatus(Authentication authentication) {
         AccountSecurityStatusDTO status =

@@ -18,9 +18,8 @@ public class KfeRemoteFinancialAuditIntegrityClient extends KfeRemoteClientSuppo
     /**
      * Creates the client with shared KFE URL, credential, and bounded network timeouts.
      *
-     * @param restTemplateBuilder Spring HTTP client builder
+     * @param restTemplateFactory factory creating workload-identity configured HTTP clients
      * @param baseUrl KFE service root
-     * @param internalSecret credential for the internal endpoint
      * @param connectTimeoutMs connection timeout
      * @param readTimeoutMs response timeout
      */

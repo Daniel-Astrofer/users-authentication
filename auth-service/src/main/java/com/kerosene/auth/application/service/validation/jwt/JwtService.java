@@ -36,6 +36,10 @@ public class JwtService implements JwtServicer {
     @Autowired(required = false)
     private RedisServicer redisService;
 
+    /** Mandatory durable source of account-wide revocation, including legacy JWTs. */
+    @Autowired
+    private com.kerosene.auth.application.port.out.AuthUserGateway userGateway;
+
     /** Rejects invalid signing configuration during startup, before authentication requests are served. */
     @PostConstruct
     void validateConfiguration() {
@@ -78,12 +82,40 @@ public class JwtService implements JwtServicer {
     /** @return compact signed JWT */
     @Override
     public String generateToken(long id, Collection<String> roles, String sessionId) {
+        return tokenAtEpoch(id, roles, sessionId, currentCredentialEpoch(id));
+    }
+
+    @Override
+    public String generateTokenAtCredentialEpoch(long id, Collection<String> roles, long credentialEpoch) {
+        if (credentialEpoch < 0 || credentialEpoch != currentCredentialEpoch(id)) {
+            throw new com.kerosene.auth.AuthExceptions.InvalidCredentials("Credentials changed during authentication.");
+        }
+        return tokenAtEpoch(id, roles, UUID.randomUUID().toString(), credentialEpoch);
+    }
+
+    /** Renewal must retain the verified generation, never upgrade a stale token during a recovery race. */
+    public String renewToken(String token) {
+        var claims = Jwts.parser().verifyWith(getSecretKey()).build().parseSignedClaims(token).getPayload();
+        Object rawEpoch = claims.get("credentialEpoch");
+        if (rawEpoch != null && !(rawEpoch instanceof Integer) && !(rawEpoch instanceof Long)) {
+            throw new com.kerosene.auth.AuthExceptions.InvalidCredentials("Invalid credential generation.");
+        }
+        long epoch = rawEpoch == null ? 0L : ((Number) rawEpoch).longValue();
+        long userId = Long.parseLong(claims.getId());
+        if (epoch < 0 || epoch != currentCredentialEpoch(userId)) {
+            throw new com.kerosene.auth.AuthExceptions.InvalidCredentials("Session is revoked.");
+        }
+        return tokenAtEpoch(userId, extractRoles(token), extractSessionId(token), epoch);
+    }
+
+    private String tokenAtEpoch(long id, Collection<String> roles, String sessionId, long epoch) {
         return Jwts.builder()
                 .subject(String.valueOf(id))
                 .id(String.valueOf(id))
                 .issuer(jwtIssuer)
                 .audience().add(jwtAudience).and()
                 .claim("sessionId", normalizeSessionId(sessionId))
+                .claim("credentialEpoch", epoch)
                 .claim("roles", normalizeRoles(roles))
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + AuthConstants.JWT_EXPIRATION_TIME))
@@ -124,11 +156,26 @@ public class JwtService implements JwtServicer {
     /** @return true when the token's session is recorded as revoked */
     @Override
     public boolean isSessionRevoked(String token) {
+        var claims = Jwts.parser().verifyWith(getSecretKey()).build().parseSignedClaims(token).getPayload();
+        long userId = Long.parseLong(claims.getId());
+        Object rawEpoch = claims.get("credentialEpoch");
+        // Missing epoch is the legacy generation zero, never the current generation.
+        if (rawEpoch != null && !(rawEpoch instanceof Integer) && !(rawEpoch instanceof Long)) return true;
+        long tokenEpoch = rawEpoch == null ? 0L : ((Number) rawEpoch).longValue();
+        if (tokenEpoch < 0L || tokenEpoch != currentCredentialEpoch(userId)) return true;
         String sessionId = extractSessionId(token);
         if (sessionId == null || sessionId.isBlank() || redisService == null) {
             return false;
         }
         return redisService.isJwtSessionRevoked(sessionId);
+    }
+
+    private long currentCredentialEpoch(long userId) {
+        if (userGateway == null) throw new IllegalStateException("Credential epoch source is unavailable.");
+        long epoch = userGateway.findCredentialEpochById(userId)
+                .orElseThrow(() -> new IllegalStateException("Authentication account is unavailable."));
+        if (epoch < 0L) throw new IllegalStateException("Credential epoch is invalid.");
+        return epoch;
     }
 
     /** Revokes the token session for no longer than its remaining lifetime. */

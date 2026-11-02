@@ -1,6 +1,10 @@
 package com.kerosene.auth.application.service.account;
 
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import com.kerosene.common.exception.ErrorCodes;
+import com.kerosene.auth.model.enums.AccountSecurityType;
+import java.util.Map;
 import org.springframework.transaction.annotation.Transactional;
 import com.kerosene.auth.AuthConstants;
 import com.kerosene.auth.AuthExceptions;
@@ -54,6 +58,12 @@ public class TotpManagementService {
     /** @return enrollment URI and secret for authenticator setup */
     public TotpSetupResponseDTO beginSetup(Long userId) {
         UserDataBase user = requireUser(userId);
+        if (user.getTOTPSecret() != null && !user.getTOTPSecret().isBlank()) {
+            throw new AuthExceptions.StructuredAuthException(
+                    "O autenticador já está ativo. Revise a configuração antes de alterar a proteção.",
+                    HttpStatus.CONFLICT, ErrorCodes.AUTH_TRANSACTIONAL_AUTH_REQUIRED,
+                    Map.of("action", "TOTP_ALREADY_ENABLED"));
+        }
         String secret = totpKeyGenerate.keyGenerator();
         redisService.setValue(tempSetupKey(userId), secret, SETUP_TTL_SECONDS);
         String otpUri = String.format(
@@ -94,6 +104,13 @@ public class TotpManagementService {
     @Transactional
     public void disable(Long userId) {
         UserDataBase user = requireUser(userId);
+        if (user.getAccountSecurity() == AccountSecurityType.SHAMIR ||
+                user.getAccountSecurity() == AccountSecurityType.MULTISIG_2FA) {
+            throw new AuthExceptions.StructuredAuthException(
+                    "Este perfil de segurança exige o autenticador.",
+                    HttpStatus.CONFLICT, ErrorCodes.AUTH_TRANSACTIONAL_AUTH_REQUIRED,
+                    Map.of("required", "TOTP", "action", "CHANGE_SECURITY_PROFILE"));
+        }
         user.setTOTPSecret(null);
         user.setBackupCodes(java.util.Collections.emptyList());
         userService.createUserInDataBase(user);

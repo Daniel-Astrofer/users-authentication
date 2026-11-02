@@ -96,7 +96,8 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
         assertEquals("ERR_KFE_RAIL_PROVIDER_UNAVAILABLE", response.getBody().getErrorCode());
-        assertEquals("KFE rail provider is offline.", response.getBody().getMessage());
+        assertEquals("The financial service is temporarily unavailable. Please try again later.",
+                response.getBody().getMessage());
         assertEquals(
                 "Os serviços de custódia e trilhos financeiros estão indisponíveis no momento. Tente novamente mais tarde.",
                 ((Map<?, ?>) response.getBody().getData()).get("guidance"));

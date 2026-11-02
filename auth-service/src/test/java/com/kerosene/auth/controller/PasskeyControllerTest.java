@@ -7,6 +7,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import com.kerosene.platform.exception.GlobalExceptionHandler;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -45,9 +48,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 
 class PasskeyControllerTest {
 
@@ -152,7 +162,7 @@ class PasskeyControllerTest {
                 eq("client-data"))).thenReturn(new PasskeyService.PasskeyVerificationResult(true, 1L));
         when(passkeyCredentialRepository.advanceSignatureCount(any(byte[].class), anyLong(), anyLong()))
                 .thenReturn(1);
-        when(jwtServicer.generateToken(42L)).thenReturn("jwt.token.value");
+        when(jwtServicer.generateTokenAtCredentialEpoch(42L, java.util.List.of("USER"), 0L)).thenReturn("jwt.token.value");
 
         ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
 
@@ -334,7 +344,55 @@ class PasskeyControllerTest {
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
         assertEquals(ErrorCodes.AUTH_INVALID_CREDENTIALS, response.getBody().getErrorCode());
         assertEquals("Account is inactive", response.getBody().getMessage());
-        verify(jwtServicer, never()).generateToken(any(Long.class));
+        verify(jwtServicer, never()).generateTokenAtCredentialEpoch(any(Long.class), org.mockito.ArgumentMatchers.anyCollection(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void passkeyVerifyReturns503WithoutMisclassifyingFinancialOutages() throws Exception {
+        assertPasskeyDependencyUnavailable(
+                new FinancialProviderUnavailableException("private-custody-endpoint"),
+                "ERR_KFE_RAIL_PROVIDER_UNAVAILABLE");
+    }
+
+    @Test
+    void passkeyVerifyReturns503WithoutExposingVaultDiagnostics() throws Exception {
+        assertPasskeyDependencyUnavailable(
+                new FinalizeSignupAccount.VaultNotReadyException("private-vault-endpoint"),
+                "ERR_VAULT_NOT_READY");
+    }
+
+    private void assertPasskeyDependencyUnavailable(RuntimeException outage, String errorCode) throws Exception {
+        byte[] credentialId = new byte[] { 1, 2, 3 };
+        UserDataBase user = new UserDataBase();
+        setUserId(user, 42L);
+        user.setUsername("alice");
+        user.setIsActive(true);
+        var credential = new PasskeyVerificationProjection(
+                credentialId, new byte[32], 0L, "ACTIVE", "localhost", "localhost", 42L, "alice", true);
+        when(passkeyCredentialRepository.findVerificationByCredentialId(any(byte[].class)))
+                .thenReturn(Optional.of(credential));
+        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
+        when(passkeyService.isClientDataOriginAllowed(any())).thenReturn(true);
+        when(passkeyService.consumeChallengeFromRedis("alice")).thenReturn("challenge-hex");
+        when(passkeyService.verifyAuthenticationAssertion(
+                eq("alice"), eq("challenge-hex"), any(), any(byte[].class), any(), any()))
+                .thenReturn(new PasskeyService.PasskeyVerificationResult(true, 1L));
+        when(passkeyCredentialRepository.advanceSignatureCount(any(byte[].class), anyLong(), anyLong())).thenReturn(1);
+        doThrow(outage).when(finalizeSignupAccount).ensureUserFinancialsReady(user, null);
+
+        var mvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new GlobalExceptionHandler()).build();
+        mvc.perform(post("/auth/passkey/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"credentialId\":\"AQID\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value(errorCode))
+                .andExpect(content().string(
+                        not(containsString("private-"))));
+        verify(jwtServicer, never()).generateTokenAtCredentialEpoch(
+                any(Long.class), org.mockito.ArgumentMatchers.anyCollection(), anyLong());
+        verify(redisService, never()).setValue(any(String.class), any(String.class), anyLong());
     }
 
     @Test
@@ -368,7 +426,7 @@ class PasskeyControllerTest {
         assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
         assertNotNull(response.getBody().getData());
         assertEquals("Passkey verified. TOTP required.", response.getBody().getMessage());
-        verify(jwtServicer, never()).generateToken(any(Long.class));
+        verify(jwtServicer, never()).generateTokenAtCredentialEpoch(any(Long.class), org.mockito.ArgumentMatchers.anyCollection(), org.mockito.ArgumentMatchers.anyLong());
         verify(redisService).setValue(any(String.class), eq("alice"), eq(StartLogin.PRE_AUTH_TTL_SECONDS));
     }
 
@@ -414,7 +472,7 @@ class PasskeyControllerTest {
         when(passkeyService.extractOriginHostFromClientData("android-client-data"))
                 .thenReturn("android:apk-key-hash:kerosene");
         when(finalizeSignupAccount.execute("session-1")).thenReturn(user);
-        when(jwtServicer.generateToken(42L)).thenReturn("jwt-token");
+        when(jwtServicer.generateTokenAtCredentialEpoch(42L, java.util.List.of("USER"), 0L)).thenReturn("jwt-token");
 
         ResponseEntity<ApiResponse<?>> response = controller.finishOnboardingRegistration(
                 "session-1",

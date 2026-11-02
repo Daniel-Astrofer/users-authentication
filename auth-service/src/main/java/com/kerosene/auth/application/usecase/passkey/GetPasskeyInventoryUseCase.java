@@ -16,9 +16,11 @@ public class GetPasskeyInventoryUseCase {
     /** Projects stored credential state into the passkey inventory DTO. */
     private final PasskeyInventoryService passkeyInventoryService;
 
-    /** Creates the inventory query use case. */
-    /** @param userRepository account lookup repository */
-    /** @param passkeyInventoryService inventory projection service */
+    /**
+     * Creates the inventory query use case.
+     * @param userRepository account lookup repository
+     * @param passkeyInventoryService inventory projection service
+     */
     public GetPasskeyInventoryUseCase(
             UserRepository userRepository,
             PasskeyInventoryService passkeyInventoryService) {
@@ -26,9 +28,11 @@ public class GetPasskeyInventoryUseCase {
         this.passkeyInventoryService = passkeyInventoryService;
     }
 
-    /** Returns the user's projected inventory, or a typed not-found outcome. */
-    /** @param userId account identifier */
-    /** @return inventory result */
+    /**
+     * Returns the user's projected inventory, or a typed not-found outcome.
+     * @param userId account identifier
+     * @return inventory result
+     */
     @Transactional(readOnly = true)
     public Result execute(Long userId) {
         UserDataBase user = userRepository.findById(userId).orElse(null);
@@ -47,15 +51,19 @@ public class GetPasskeyInventoryUseCase {
      */
     public record Result(Status status, String message, PasskeyInventoryDTO inventory) {
 
-        /** Builds a not-found result. */
-        /** @return missing-user result */
+        /**
+         * Builds a not-found result.
+         * @return missing-user result
+         */
         private static Result userNotFound() {
             return new Result(Status.USER_NOT_FOUND, "User not found", null);
         }
 
-        /** Builds a result containing the current inventory projection. */
-        /** @param inventory projected account inventory */
-        /** @return successful result */
+        /**
+         * Builds a result containing the current inventory projection.
+         * @param inventory projected account inventory
+         * @return successful result
+         */
         private static Result found(PasskeyInventoryDTO inventory) {
             return new Result(Status.FOUND, null, inventory);
         }

@@ -19,16 +19,23 @@ public class SHA256 implements Hasher {
     /** Deployment secret used as the HMAC key; it is not embedded in the derived value. */
     private final String hardwareKey;
 
-    /** Stores the configured secret for keyed digest operations. */
-    /** @param hardwareKey pepper loaded from secret configuration */
+    /**
+     * Stores the configured secret for keyed digest operations.
+     *
+     * @param hardwareKey pepper loaded from secret configuration
+     */
     public SHA256(@Value("${api.secret.pepper.secret}") String hardwareKey) {
         this.hardwareKey = hardwareKey;
     }
 
-    /** Derives a Base64 HMAC-SHA256 value and clears encoded input buffers after use. */
-    /** @param input sensitive characters; the temporary UTF-8 representation is erased */
-    /** @return Base64 encoded keyed digest */
-    /** @throws RuntimeException when the HMAC provider cannot perform the operation */
+    /**
+     * Derives a Base64 HMAC-SHA256 value. The temporary UTF-8 byte buffer is cleared on the successful path;
+     * this implementation does not clear the caller's character array.
+     *
+     * @param input sensitive characters used as the HMAC message
+     * @return Base64 encoded keyed digest
+     * @throws RuntimeException when the HMAC provider cannot perform the operation
+     */
     public String hash(char[] input) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
@@ -50,10 +57,13 @@ public class SHA256 implements Hasher {
         }
     }
 
-    /** Compares the deterministic keyed digest to a stored value. */
-    /** @param passphrase candidate sensitive characters */
-    /** @param hash expected Base64 digest */
-    /** @return whether the derived value equals the expected digest */
+    /**
+     * Compares the deterministic keyed digest to a stored value.
+     *
+     * @param passphrase candidate sensitive characters; the hash method does not clear this array
+     * @param hash expected Base64 digest
+     * @return whether the derived value equals the expected digest
+     */
     @Override
     public Boolean verify(char[] passphrase, String hash) {
         String pass = hash(passphrase);

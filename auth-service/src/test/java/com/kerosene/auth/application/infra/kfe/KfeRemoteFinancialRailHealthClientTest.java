@@ -50,6 +50,18 @@ class KfeRemoteFinancialRailHealthClientTest {
         server.verify();
     }
 
+    @Test
+    void preservesFailedMeshReadinessFromKfe() throws Exception {
+        var client = client();
+        var server = MockRestServiceServer.createServer(restTemplate(client));
+        server.expect(requestTo("http://kfe.test/internal/kfe/rail-health/vault-mesh"))
+                .andRespond(withSuccess("{\"ready\":false,\"status\":\"DOWN:PROBE_STALE\",\"checkedAt\":null}", MediaType.APPLICATION_JSON));
+        var mesh = client.vaultMeshHealth();
+        assertEquals(false, mesh.ready());
+        assertEquals("DOWN:PROBE_STALE", mesh.status());
+        server.verify();
+    }
+
     private KfeRemoteFinancialRailHealthClient client() {
         return new KfeRemoteFinancialRailHealthClient(
                 new InternalServiceRestTemplateFactory(

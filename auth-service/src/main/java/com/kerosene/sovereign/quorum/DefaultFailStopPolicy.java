@@ -10,9 +10,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/** In-memory quorum failure tracker that suspends writes after the configured outage window. */
 @Service
 public class DefaultFailStopPolicy implements FailStopPolicy {
 
+    /** Logger for quorum state transitions and write rejection. */
     private static final Logger logger = LoggerFactory.getLogger(DefaultFailStopPolicy.class);
 
     private final SuicideService suicideService;
@@ -22,10 +24,19 @@ public class DefaultFailStopPolicy implements FailStopPolicy {
     private volatile boolean failStopMode = false;
     private volatile Instant lastQuorumSuccess = Instant.now();
 
+    /** Creates the policy with hard JVM halt disabled.
+     * @param suicideService process halt integration used when explicitly enabled
+     * @param failStopWindowMs outage duration before automatic fail-stop
+     */
     public DefaultFailStopPolicy(SuicideService suicideService, long failStopWindowMs) {
         this(suicideService, failStopWindowMs, false);
     }
 
+    /** Creates the policy with configured outage window and optional hard halt.
+     * @param suicideService process halt integration used when enabled
+     * @param failStopWindowMs outage duration before automatic fail-stop
+     * @param hardHaltEnabled whether fail-stop invokes immediate process termination
+     */
     @org.springframework.beans.factory.annotation.Autowired
     public DefaultFailStopPolicy(
             SuicideService suicideService,
@@ -37,21 +48,27 @@ public class DefaultFailStopPolicy implements FailStopPolicy {
     }
 
     @Override
+    /** @return current fail-stop flag */
     public boolean isFailStopMode() {
         return failStopMode;
     }
 
     @Override
+    /** @return timestamp of the last successful quorum check */
     public Instant lastQuorumSuccess() {
         return lastQuorumSuccess;
     }
 
     @Override
+    /** @return consecutive failure count */
     public int consecutiveQuorumFailures() {
         return consecutiveQuorumFailures.get();
     }
 
     @Override
+    /** Throws {@link SplitBrainException} when writes are suspended.
+     * @param transactionHash transaction identifier for the diagnostic log
+     */
     public void assertWritesAllowed(String transactionHash) {
         if (!failStopMode) {
             return;
@@ -65,12 +82,16 @@ public class DefaultFailStopPolicy implements FailStopPolicy {
     }
 
     @Override
+    /** Records quorum recovery and resets the failure counter. */
     public void recordQuorumSuccess() {
         consecutiveQuorumFailures.set(0);
         lastQuorumSuccess = Instant.now();
     }
 
     @Override
+    /** Records an outage and enters fail-stop once it exceeds the configured window.
+     * @param reason description of the quorum failure
+     */
     public void recordQuorumFailure(String reason) {
         int failures = consecutiveQuorumFailures.incrementAndGet();
         long msSinceLastSuccess = Duration.between(lastQuorumSuccess, Instant.now()).toMillis();
@@ -83,6 +104,9 @@ public class DefaultFailStopPolicy implements FailStopPolicy {
     }
 
     @Override
+    /** Suspends writes; invokes the hard halt integration only when configured.
+     * @param reason explanation for the state transition
+     */
     public void enterFailStop(String reason) {
         if (failStopMode) {
             logger.error("[Quorum Fail-Stop] Fail-stop already active. Reason: {}", reason);
@@ -100,6 +124,7 @@ public class DefaultFailStopPolicy implements FailStopPolicy {
     }
 
     @Override
+    /** Clears fail-stop and resets the quorum health timestamps and counter. */
     public void clearFailStop() {
         failStopMode = false;
         consecutiveQuorumFailures.set(0);

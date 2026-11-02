@@ -23,6 +23,20 @@ public class UserDataBase implements UserDB {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Invalidates older account sessions whenever emergency credentials are replaced. */
+    @Column(name = "credential_epoch", nullable = false)
+    private long credentialEpoch;
+
+    /** Prevents unrelated stale account writes from undoing a concurrent recovery. */
+    @Version
+    @Column(name = "record_version", nullable = false)
+    private long recordVersion;
+
+    @JsonIgnore
+    public long getCredentialEpoch() { return credentialEpoch; }
+
+    public void advanceCredentialEpoch() { credentialEpoch = Math.addExact(credentialEpoch, 1L); }
+
     @Column(name = "username", nullable = false, unique = true)
     private String username;
 

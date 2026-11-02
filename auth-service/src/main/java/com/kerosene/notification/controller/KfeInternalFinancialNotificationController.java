@@ -1,6 +1,8 @@
 package com.kerosene.notification.controller;
 
 import org.springframework.http.HttpStatus;
+import com.kerosene.common.financial.notification.FinancialNotificationEventRequest;
+import com.kerosene.common.financial.notification.FinancialNotificationReceipt;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -183,6 +185,51 @@ public class KfeInternalFinancialNotificationController {
                 request.rail(),
                 request.amountSats());
         return ResponseEntity.ok(ApiResponse.success("KFE external payment sent notification accepted.", null));
+    }
+
+    @PostMapping("/events")
+    public ResponseEntity<FinancialNotificationReceipt> acceptEvent(@RequestBody FinancialNotificationEventRequest request) {
+        return ResponseEntity.ok(notificationPort.deliverEvent(request));
+    }
+
+    @PostMapping("/payment-initiated")
+    public ResponseEntity<ApiResponse<Void>> initiated(@RequestBody FinancialExternalPaymentNotificationRequest request) {
+        notificationPort.notifyPaymentInitiated(request.userId(), request.transactionId(), request.walletId(), request.rail(), request.amountSats());
+        return accepted();
+    }
+
+    @PostMapping("/payment-broadcast")
+    public ResponseEntity<ApiResponse<Void>> broadcast(@RequestBody FinancialOutboundNotificationRequest request) {
+        notificationPort.notifyPaymentBroadcast(request.userId(), request.transactionId(), request.walletId(), request.rail(), request.amountSats(), request.destinationHint());
+        return accepted();
+    }
+
+    @PostMapping("/payment-confirmed")
+    public ResponseEntity<ApiResponse<Void>> confirmed(@RequestBody FinancialOutboundNotificationRequest request) {
+        notificationPort.notifyPaymentConfirmed(request.userId(), request.transactionId(), request.walletId(), request.rail(), request.amountSats(), request.confirmations());
+        return accepted();
+    }
+
+    @PostMapping("/payment-failed")
+    public ResponseEntity<ApiResponse<Void>> failed(@RequestBody FinancialOutboundNotificationRequest request) {
+        notificationPort.notifyPaymentFailed(request.userId(), request.transactionId(), request.walletId(), request.rail(), request.amountSats(), request.destinationHint(), null);
+        return accepted();
+    }
+
+    @PostMapping("/payment-reconciliation-required")
+    public ResponseEntity<ApiResponse<Void>> reconciliation(@RequestBody FinancialOutboundNotificationRequest request) {
+        notificationPort.notifyPaymentReconciliationRequired(request.userId(), request.transactionId(), request.walletId(), request.rail(), request.amountSats(), null);
+        return accepted();
+    }
+
+    @PostMapping("/outbound-conflicted")
+    public ResponseEntity<ApiResponse<Void>> conflicted(@RequestBody FinancialOutboundNotificationRequest request) {
+        notificationPort.notifyOutboundConflicted(request.userId(), request.transactionId(), request.walletId(), request.rail(), request.amountSats(), request.destinationHint());
+        return accepted();
+    }
+
+    private ResponseEntity<ApiResponse<Void>> accepted() {
+        return ResponseEntity.ok(ApiResponse.success("Financial notification accepted.", null));
     }
 
     private void require(boolean condition, String message) {

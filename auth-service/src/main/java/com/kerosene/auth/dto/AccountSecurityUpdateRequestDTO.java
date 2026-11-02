@@ -5,6 +5,10 @@ import com.kerosene.auth.model.enums.AccountSecurityType;
 /** Request to change the account security mode and its mode-specific thresholds. */
 public class AccountSecurityUpdateRequestDTO {
 
+    /** Creates an empty request bean for JSON deserialization. */
+    public AccountSecurityUpdateRequestDTO() {
+    }
+
     /**
      * Requested mode; STANDARD is selected when a request omits this property.
      */

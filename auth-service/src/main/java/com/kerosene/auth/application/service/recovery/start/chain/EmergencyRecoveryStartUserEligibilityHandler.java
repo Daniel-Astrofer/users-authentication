@@ -26,11 +26,13 @@ public class EmergencyRecoveryStartUserEligibilityHandler extends AbstractEmerge
     /** Records failed recovery attempts scoped to username and client fingerprint. */
     private final RecoveryRateLimitService rateLimitService;
 
-    /** Creates the eligibility step with identity, secret, and abuse-control boundaries. */
-    /** @param userGateway account lookup */
-    /** @param hasher Argon2 passphrase verifier */
-    /** @param recoveryCodeService recovery code utilities */
-    /** @param rateLimitService recovery attempt tracking */
+    /**
+     * Creates the eligibility step with identity, secret, and abuse-control boundaries.
+     * @param userGateway account lookup
+     * @param hasher Argon2 passphrase verifier
+     * @param recoveryCodeService recovery code utilities
+     * @param rateLimitService recovery attempt tracking
+     */
     public EmergencyRecoveryStartUserEligibilityHandler(AuthUserGateway userGateway,
             @Qualifier("Argon2Hasher") Hasher hasher,
             RecoveryCodeService recoveryCodeService,
@@ -41,8 +43,10 @@ public class EmergencyRecoveryStartUserEligibilityHandler extends AbstractEmerge
         this.rateLimitService = rateLimitService;
     }
 
-    /** Loads the owner, applies generic rejection for absent/insufficient accounts, and rejects reused passphrases. */
-    /** @param context validated request and normalized user identity */
+    /**
+     * Loads the owner, applies generic rejection for absent/insufficient accounts, and rejects reused passphrases.
+     * @param context validated request and normalized user identity
+     */
     @Override
     public void handle(EmergencyRecoveryStartContext context) {
         UserDataBase user = userGateway.findByUsername(context.normalizedUsername());
@@ -70,9 +74,11 @@ public class EmergencyRecoveryStartUserEligibilityHandler extends AbstractEmerge
         handleNext(context);
     }
 
-    /** Copies a passphrase into a temporary mutable buffer for verification and later zeroing. */
-    /** @param input request passphrase */
-    /** @return independent copy or null */
+    /**
+     * Copies a passphrase into a temporary mutable buffer for verification and later zeroing.
+     * @param input request passphrase
+     * @return independent copy or null
+     */
     private char[] copyCharArray(char[] input) {
         if (input == null) {
             return null;

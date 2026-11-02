@@ -28,6 +28,11 @@ import com.kerosene.common.exception.FinancialProviderUnavailableException;
 
 import java.util.List;
 
+/**
+ * HTTP boundary for onboarding and authenticated device-key registration, challenge login,
+ * and account-scoped device revocation. Protocol failures are mapped to stable client error codes
+ * while account creation and infrastructure readiness failures remain available to global handlers.
+ */
 @RestController
 @RequestMapping("/auth/device-key")
 public class DeviceKeyController {
@@ -46,6 +51,17 @@ public class DeviceKeyController {
     private final FinishOnboardingDeviceKeyRegistrationUseCase finishOnboardingDeviceKeyRegistrationUseCase;
     private final VerifyDeviceKeyLoginUseCase verifyDeviceKeyLoginUseCase;
 
+    /**
+     * Creates the device-key controller with separate use cases for each lifecycle transition.
+     *
+     * @param getDeviceKeyAuthenticationChallengeUseCase creates public login challenges
+     * @param manageDeviceKeyDevicesUseCase lists and revokes account-owned credentials
+     * @param startOnboardingDeviceKeyRegistrationUseCase creates challenges tied to signup sessions
+     * @param startAuthenticatedDeviceKeyRegistrationUseCase creates challenges for signed-in accounts
+     * @param finishAuthenticatedDeviceKeyRegistrationUseCase verifies and persists authenticated registration
+     * @param finishOnboardingDeviceKeyRegistrationUseCase verifies registration before creating an account
+     * @param verifyDeviceKeyLoginUseCase verifies a challenge signature and establishes login state
+     */
     public DeviceKeyController(
             GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase,
             ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase,
@@ -63,6 +79,13 @@ public class DeviceKeyController {
         this.verifyDeviceKeyLoginUseCase = verifyDeviceKeyLoginUseCase;
     }
 
+    /**
+     * Starts device-key enrollment inside a pending signup session.
+     *
+     * @param sessionId signup session identifier owning the challenge
+     * @param username optional account name associated with the signup session
+     * @return challenge response, or 404 when the signup session expired
+     */
     @PostMapping("/onboarding/start")
     public ResponseEntity<ApiResponse<DeviceKeyChallengeResponse>> startOnboardingRegistration(
             @RequestParam String sessionId,
@@ -77,6 +100,13 @@ public class DeviceKeyController {
         return ResponseEntity.ok(ApiResponse.success("Device key challenge generated", result.challenge()));
     }
 
+    /**
+     * Verifies a signup-bound device-key response, completes account creation, and returns its token.
+     *
+     * @param sessionId signup session used to start the challenge
+     * @param request challenge assertion and device public-key registration data
+     * @return session token, conflict for an already-bound device, or a mapped protocol error
+     */
     @PostMapping("/onboarding/finish")
     public ResponseEntity<ApiResponse<?>> finishOnboardingRegistration(
             @RequestParam String sessionId,
@@ -116,6 +146,12 @@ public class DeviceKeyController {
         }
     }
 
+    /**
+     * Issues an authentication challenge for a username that has a registered device key.
+     *
+     * @param username account name whose device-key credential should be challenged
+     * @return challenge response, or 404 when the account cannot be found
+     */
     @GetMapping("/challenge")
     public ResponseEntity<ApiResponse<DeviceKeyChallengeResponse>> getChallenge(@RequestParam String username) {
         GetDeviceKeyAuthenticationChallengeUseCase.Result result =
@@ -129,6 +165,11 @@ public class DeviceKeyController {
                 result.challenge()));
     }
 
+    /**
+     * Starts device-key enrollment for the currently authenticated account.
+     *
+     * @return challenge response or 401 when no authenticated user is available
+     */
     @PostMapping("/register/start")
     public ResponseEntity<ApiResponse<DeviceKeyChallengeResponse>> startAuthenticatedRegistration() {
         Long userId = authenticatedUserId();
@@ -149,6 +190,12 @@ public class DeviceKeyController {
                 result.challenge()));
     }
 
+    /**
+     * Verifies the authenticated registration assertion and stores the new device-key credential.
+     *
+     * @param request challenge assertion, public key, and device metadata
+     * @return success envelope, conflict for another account's binding, or mapped protocol error
+     */
     @PostMapping("/register/finish")
     public ResponseEntity<ApiResponse<?>> finishAuthenticatedRegistration(
             @RequestBody DeviceKeyRegistrationRequest request) {
@@ -183,6 +230,13 @@ public class DeviceKeyController {
         }
     }
 
+    /**
+     * Verifies a device-key login assertion and maps its protocol result to an HTTP response.
+     * A successful signature may still return 202 when the account requires a TOTP continuation.
+     *
+     * @param request credential identifier, signed challenge, and proof fields
+     * @return authentication result, optional TOTP continuation data, or a mapped protocol failure
+     */
     @PostMapping("/verify")
     public ResponseEntity<ApiResponse<Object>> verifyAndLogin(@RequestBody DeviceKeyVerifyRequest request) {
         try {
@@ -197,6 +251,9 @@ public class DeviceKeyController {
         } catch (DeviceKeyProtocolException exception) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error(DEVICE_KEY_ASSERTION_ERROR, ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED));
+        } catch (FinancialProviderUnavailableException
+                 | FinalizeSignupAccount.VaultNotReadyException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             log.error("Device key verification failed", exception);
             return ResponseEntity.badRequest()
@@ -204,6 +261,7 @@ public class DeviceKeyController {
         }
     }
 
+    /** Maps each device-key verification state to its stable HTTP status and error code. */
     private ResponseEntity<ApiResponse<Object>> mapVerifyResult(VerifyDeviceKeyLoginUseCase.Result result) {
         return switch (result.status()) {
             case INVALID_CREDENTIAL_ID -> ResponseEntity.badRequest()
@@ -223,6 +281,11 @@ public class DeviceKeyController {
         };
     }
 
+    /**
+     * Lists device-key credentials owned by the authenticated account.
+     *
+     * @return device summaries or 401 when the request has no authenticated account
+     */
     @GetMapping("/devices")
     public ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> getRegisteredDevices() {
         Long userId = authenticatedUserId();
@@ -240,6 +303,12 @@ public class DeviceKeyController {
         return ResponseEntity.ok(ApiResponse.success("Registered device keys retrieved.", result.devices()));
     }
 
+    /**
+     * Revokes one credential scoped to the authenticated account and returns the refreshed device list.
+     *
+     * @param credentialId credential identifier to revoke
+     * @return refreshed credential list, 404 for an unknown credential, or 401 when unauthenticated
+     */
     @PostMapping("/devices/{credentialId}/revoke")
     public ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> revokeDevice(@PathVariable String credentialId) {
         Long userId = authenticatedUserId();
@@ -261,6 +330,7 @@ public class DeviceKeyController {
         return ResponseEntity.ok(ApiResponse.success("Device key revoked.", result.devices()));
     }
 
+    /** Builds the stable unauthorized response used when a credential cannot authenticate this account. */
     private ResponseEntity<ApiResponse<Object>> credentialNotFound() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error(
@@ -268,6 +338,11 @@ public class DeviceKeyController {
                         ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND));
     }
 
+    /**
+     * Reads the current Spring Security principal as a numeric persisted user identifier.
+     *
+     * @return authenticated user ID, or null for absent, anonymous, or unauthenticated principals
+     */
     private Long authenticatedUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth.getName().equals("anonymousUser")) {

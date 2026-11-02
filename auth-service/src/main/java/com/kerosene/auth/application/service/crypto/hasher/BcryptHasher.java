@@ -11,15 +11,21 @@ public class BcryptHasher implements Hasher {
     /** HMAC pre-hasher that protects low-entropy input before bcrypt's password-length limit. */
     private SHA256 sha256;
 
-    /** Supplies the peppered HMAC implementation used before bcrypt. */
-    /** @param sha256 HMAC pre-hasher */
+    /**
+     * Supplies the HMAC implementation used to derive the value consumed by bcrypt.
+     *
+     * @param sha256 configured keyed HMAC pre-hasher
+     */
     public BcryptHasher(SHA256 sha256) {
         this.sha256 = sha256;
     }
 
-    /** Hashes the passphrase with HMAC-SHA256, then stores a salted bcrypt encoding. */
-    /** @param passphrase sensitive input; the pre-hasher clears its buffer */
-    /** @return bcrypt encoded hash */
+    /**
+     * Derives a keyed HMAC-SHA256 string and encodes that string with a fresh bcrypt encoder.
+     *
+     * @param passphrase sensitive input passed to the HMAC implementation
+     * @return salted bcrypt encoding of the derived HMAC value
+     */
     @Override
     public String hash(char[] passphrase) {
         String pass = sha256.hash(passphrase);
@@ -27,10 +33,13 @@ public class BcryptHasher implements Hasher {
         return passwordEncoder.encode(pass);
     }
 
-    /** Repeats the HMAC derivation and asks bcrypt to verify the resulting value. */
-    /** @param passphrase candidate sensitive input */
-    /** @param hash previously encoded bcrypt value */
-    /** @return whether both derivation and bcrypt comparison match */
+    /**
+     * Repeats the HMAC derivation and asks bcrypt to verify the resulting value.
+     *
+     * @param passphrase candidate sensitive input passed to the HMAC implementation
+     * @param hash previously encoded bcrypt value
+     * @return whether the derived value matches the stored bcrypt encoding
+     */
     @Override
     public Boolean verify(char[] passphrase, String hash) {
         String pass = sha256.hash(passphrase);

@@ -38,6 +38,9 @@ class JwtAuthenticationFilterTest {
     @BeforeEach
     void setUp() {
         jwtService = new JwtService();
+        var users = mock(com.kerosene.auth.application.port.out.AuthUserGateway.class);
+        when(users.findCredentialEpochById(org.mockito.ArgumentMatchers.anyLong())).thenReturn(java.util.Optional.of(0L));
+        ReflectionTestUtils.setField(jwtService, "userGateway", users);
         ReflectionTestUtils.setField(jwtService, "secretKey", "01234567890123456789012345678901");
         filter = new JwtAuthenticationFilter(jwtService, mock(HandlerExceptionResolver.class));
     }

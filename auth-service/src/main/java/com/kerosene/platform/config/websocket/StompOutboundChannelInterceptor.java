@@ -13,10 +13,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class StompOutboundChannelInterceptor implements ChannelInterceptor {
 
+    private final StompSessionAuthorization sessions;
+    public StompOutboundChannelInterceptor(StompSessionAuthorization sessions) { this.sessions = sessions; }
+
     private static final Logger log = LoggerFactory.getLogger(StompOutboundChannelInterceptor.class);
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
+        // Broker messages often use SimpMessageHeaderAccessor, not a STOMP accessor.
+        if (org.springframework.messaging.simp.SimpMessageHeaderAccessor.getMessageType(message.getHeaders())
+                == org.springframework.messaging.simp.SimpMessageType.MESSAGE
+                && !sessions.isAuthorized(org.springframework.messaging.simp.SimpMessageHeaderAccessor.getSessionId(message.getHeaders()))) {
+            return null;
+        }
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         if (accessor == null) {
             return message;

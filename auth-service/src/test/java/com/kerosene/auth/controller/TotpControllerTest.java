@@ -64,7 +64,14 @@ class TotpControllerTest {
         assertNotNull(response.getBody());
         assertEquals("TOTP disabled successfully.", response.getBody().getMessage());
         assertEquals("OK", response.getBody().getData());
-        verify(totpOperationsUseCase).disable(42L);
+        verify(totpOperationsUseCase).disable(42L, null, null, null);
+    }
+
+    @Test
+    void disableForwardsFactorsWithoutChangingThePrincipal() {
+        controller.disable(authentication("42"),
+                new TotpController.DisableTotpRequest("123456", "proof", " phrase "));
+        verify(totpOperationsUseCase).disable(42L, "123456", "proof", " phrase ");
     }
 
     private Authentication authentication(String name) {

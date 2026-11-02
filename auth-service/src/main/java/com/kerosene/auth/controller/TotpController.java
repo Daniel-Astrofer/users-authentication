@@ -40,9 +40,25 @@ public class TotpController {
         return ResponseEntity.ok(ApiResponse.success("TOTP enabled successfully.", response));
     }
 
-    @DeleteMapping
+    /** Compatibility entry point; omitted factors are still checked by the use case. */
     public ResponseEntity<ApiResponse<String>> disable(Authentication authentication) {
-        totpOperationsUseCase.disable(Long.parseLong(authentication.getName()));
+        return disable(authentication, null);
+    }
+
+    /** Disables the authenticator with optional account-security factors. */
+    @DeleteMapping
+    public ResponseEntity<ApiResponse<String>> disable(Authentication authentication,
+            @RequestBody(required = false) DisableTotpRequest request) {
+        DisableTotpRequest factors = request != null ? request : new DisableTotpRequest(null, null, null);
+        totpOperationsUseCase.disable(Long.parseLong(authentication.getName()),
+                factors.totpCode(), factors.passkeyAssertionJson(), factors.confirmationPassphrase());
         return ResponseEntity.ok(ApiResponse.success("TOTP disabled successfully.", "OK"));
     }
+    /** One-use factors authorized against the authenticated account.
+     * @param totpCode authenticator code
+     * @param passkeyAssertionJson signed device/passkey proof
+     * @param confirmationPassphrase account confirmation phrase
+     */
+    public record DisableTotpRequest(String totpCode, String passkeyAssertionJson,
+            String confirmationPassphrase) {}
 }

@@ -2,6 +2,10 @@ package com.kerosene.auth.dto.devicekey;
 
 /** Login-time request proving possession of a registered device private key. */
 public class DeviceKeyVerifyRequest {
+    /** Creates an empty request for Jackson to populate from the authentication JSON body. */
+    public DeviceKeyVerifyRequest() {
+    }
+
     /** Username that selects the account whose credential must be checked. */
     private String username;
     /**

@@ -14,9 +14,12 @@ public class Argon2Hasher implements Hasher {
     /** Secret pepper kept outside the encoded hash and loaded from deployment configuration. */
     private final String pepper;
 
-    /** Builds the encoder and rejects missing pepper configuration during application startup. */
-    /** @param pepper server-side secret appended before hashing */
-    /** @throws IllegalStateException when no nonblank pepper is configured */
+    /**
+     * Builds the Argon2id encoder and rejects missing pepper configuration during application startup.
+     *
+     * @param pepper server-side secret appended to each passphrase before hashing and verification
+     * @throws IllegalStateException when no nonblank pepper is configured
+     */
     public Argon2Hasher(@Value("${api.secret.pepper.secret}") String pepper) {
         if (pepper == null || pepper.isBlank()) {
             throw new IllegalStateException("[Security] api.secret.pepper.secret is not configured.");
@@ -27,9 +30,13 @@ public class Argon2Hasher implements Hasher {
         this.encoder = new Argon2PasswordEncoder(16, 32, 4, 65536, 3);
     }
 
-    /** Hashes the passphrase with the pepper and clears the supplied and temporary character buffers. */
-    /** @param passphrase caller-owned sensitive characters, cleared before return */
-    /** @return Argon2 encoded hash with salt and algorithm parameters */
+    /**
+     * Hashes the passphrase with the configured pepper, then clears the caller array and temporary character arrays.
+     * The resulting value embeds the salt and Argon2 parameters needed for later verification.
+     *
+     * @param passphrase sensitive characters; the supplied array is zeroed before this method returns
+     * @return Argon2 encoded hash with salt and algorithm parameters
+     */
     @Override
     public String hash(char[] passphrase) {
         char[] pepperChars = this.pepper.toCharArray();
@@ -49,10 +56,13 @@ public class Argon2Hasher implements Hasher {
         }
     }
 
-    /** Checks a passphrase against the encoded Argon2 hash and clears sensitive buffers. */
-    /** @param passphrase caller-owned sensitive characters, cleared before return */
-    /** @param hash previously encoded Argon2 value */
-    /** @return whether the passphrase matches */
+    /**
+     * Checks a passphrase against the encoded Argon2 hash and clears the supplied and temporary character arrays.
+     *
+     * @param passphrase candidate sensitive characters; the supplied array is zeroed before return
+     * @param hash previously encoded Argon2 value
+     * @return whether the passphrase matches
+     */
     @Override
     public Boolean verify(char[] passphrase, String hash) {
         char[] pepperChars = this.pepper.toCharArray();

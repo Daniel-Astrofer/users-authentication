@@ -13,9 +13,11 @@ import com.kerosene.platform.config.websocket.inbound.StompMessageContext;
 public class StompInboundChannelInterceptor implements ChannelInterceptor {
 
     private final StompInboundMessageHandlerChain handlerChain;
+    private final StompSessionAuthorization sessions;
 
-    public StompInboundChannelInterceptor(StompInboundMessageHandlerChain handlerChain) {
+    public StompInboundChannelInterceptor(StompInboundMessageHandlerChain handlerChain, StompSessionAuthorization sessions) {
         this.handlerChain = handlerChain;
+        this.sessions = sessions;
     }
 
     @Override
@@ -23,6 +25,13 @@ public class StompInboundChannelInterceptor implements ChannelInterceptor {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         if (accessor == null) {
             return message;
+        }
+        var command = accessor.getCommand();
+        if (command == org.springframework.messaging.simp.stomp.StompCommand.DISCONNECT) {
+            sessions.remove(accessor.getSessionId());
+        } else if (command != null && command != org.springframework.messaging.simp.stomp.StompCommand.CONNECT
+                && !sessions.isAuthorized(accessor.getSessionId())) {
+            throw new org.springframework.messaging.MessageDeliveryException("Session is no longer authorized.");
         }
         return handlerChain.handle(new StompMessageContext(message, accessor));
     }

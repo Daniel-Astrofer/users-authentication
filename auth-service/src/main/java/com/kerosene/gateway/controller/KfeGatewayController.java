@@ -50,6 +50,7 @@ public class KfeGatewayController {
      * @param connectTimeoutMs maximum connection setup time
      * @param readTimeoutMs maximum upstream response wait
      */
+    @org.springframework.beans.factory.annotation.Autowired
     public KfeGatewayController(
             InternalServiceRestTemplateFactory restTemplateFactory,
             @Value("${kfe.internal.base-url:http://kfe-service:8080}") String kfeBaseUrl,

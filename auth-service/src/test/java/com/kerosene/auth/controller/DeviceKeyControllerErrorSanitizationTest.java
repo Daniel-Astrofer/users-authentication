@@ -3,6 +3,9 @@ package com.kerosene.auth.controller;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import com.kerosene.platform.exception.GlobalExceptionHandler;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,17 +25,27 @@ import com.kerosene.auth.dto.devicekey.DeviceKeyRegistrationRequest;
 import com.kerosene.auth.dto.devicekey.DeviceKeyVerifyRequest;
 import com.kerosene.common.dto.ApiResponse;
 import com.kerosene.common.exception.ErrorCodes;
+import com.kerosene.common.exception.FinancialProviderUnavailableException;
+import com.kerosene.auth.application.orchestrator.signup.FinalizeSignupAccount;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 
 class DeviceKeyControllerErrorSanitizationTest {
 
@@ -145,6 +158,44 @@ class DeviceKeyControllerErrorSanitizationTest {
         assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_GENERIC);
         assertThat(response.getBody().getMessage()).isEqualTo("Device key request failed.");
         assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+
+    @Test
+    void verifyAndLoginPreservesFinancialUnavailabilityForThe503Handler() {
+        DeviceKeyVerifyRequest request = new DeviceKeyVerifyRequest();
+        var unavailable = new FinancialProviderUnavailableException(SECRET_RUNTIME_MESSAGE);
+        when(verifyDeviceKeyLoginUseCase.execute(request)).thenThrow(unavailable);
+
+        assertThatThrownBy(() -> controller.verifyAndLogin(request)).isSameAs(unavailable);
+    }
+
+    @Test
+    void verifyAndLoginPreservesVaultUnavailabilityForThe503Handler() {
+        DeviceKeyVerifyRequest request = new DeviceKeyVerifyRequest();
+        var unavailable = new FinalizeSignupAccount.VaultNotReadyException(SECRET_RUNTIME_MESSAGE);
+        when(verifyDeviceKeyLoginUseCase.execute(request)).thenThrow(unavailable);
+
+        assertThatThrownBy(() -> controller.verifyAndLogin(request)).isSameAs(unavailable);
+    }
+
+    @Test
+    void verifyAndLoginReturnsSafe503EnvelopeForDependencyOutages() throws Exception {
+        var mvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new GlobalExceptionHandler()).build();
+        var outages = List.of(
+                new FinancialProviderUnavailableException("private-custody-endpoint"),
+                new FinalizeSignupAccount.VaultNotReadyException("private-vault-endpoint"));
+        var codes = List.of("ERR_KFE_RAIL_PROVIDER_UNAVAILABLE", "ERR_VAULT_NOT_READY");
+        for (int index = 0; index < outages.size(); index++) {
+            doThrow(outages.get(index)).when(verifyDeviceKeyLoginUseCase).execute(any());
+            mvc.perform(post("/auth/device-key/verify")
+                            .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.errorCode").value(codes.get(index)))
+                    .andExpect(content().string(
+                            not(containsString("private-"))));
+        }
     }
 
     @Test

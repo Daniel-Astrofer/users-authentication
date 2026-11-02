@@ -8,7 +8,13 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class JwtServiceConfigurationTest {
-    private final ApplicationContextRunner context = new ApplicationContextRunner().withBean(JwtService.class);
+    private final ApplicationContextRunner context = new ApplicationContextRunner().withBean(JwtService.class)
+            .withBean(com.kerosene.auth.application.port.out.AuthUserGateway.class, () -> {
+                var users = org.mockito.Mockito.mock(com.kerosene.auth.application.port.out.AuthUserGateway.class);
+                org.mockito.Mockito.when(users.findCredentialEpochById(org.mockito.ArgumentMatchers.anyLong()))
+                        .thenReturn(java.util.Optional.of(0L));
+                return users;
+            });
 
     @ParameterizedTest
     @ValueSource(strings = {"", " ", "test-key-too-short", "1234567890123456789012345678901"})

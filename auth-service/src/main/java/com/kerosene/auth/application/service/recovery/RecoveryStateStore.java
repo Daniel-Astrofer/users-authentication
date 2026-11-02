@@ -61,7 +61,17 @@ public class RecoveryStateStore {
     /** @throws AuthExceptions.RecoverySessionExpiredException when session is absent or already consumed */
     public EmergencyRecoveryState consumeRequired(String recoverySessionId) {
         EmergencyRecoveryState state = redisContract.getdelEmergencyRecoveryState(recoverySessionId);
-        if (state == null) {
+        return requireMatchingState(recoverySessionId, state);
+    }
+
+    /** Reads an existing session to prepare a short-lived key challenge without consuming completion authority. */
+    public EmergencyRecoveryState readRequired(String recoverySessionId) {
+        return requireMatchingState(recoverySessionId, redisContract.findEmergencyRecoveryState(recoverySessionId));
+    }
+
+    private EmergencyRecoveryState requireMatchingState(String recoverySessionId, EmergencyRecoveryState state) {
+        if (recoverySessionId == null || recoverySessionId.isBlank() || state == null
+                || !recoverySessionId.equals(state.getSessionId())) {
             throw new AuthExceptions.RecoverySessionExpiredException(
                     "Recovery session expired or was already consumed. Restart the recovery flow.");
         }

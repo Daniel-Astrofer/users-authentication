@@ -97,13 +97,16 @@ class EmergencyRecoveryUseCaseTest {
                 passkeyGateway,
                 recoveryCodeService,
                 notificationService,
-                mock(com.kerosene.auth.application.service.devicebinding.DeviceBindingPolicy.class));
+                mock(com.kerosene.auth.application.service.devicebinding.DeviceBindingPolicy.class),
+                mock(com.kerosene.auth.application.service.devicekey.DeviceKeyService.class),
+                mock(com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository.class));
 
         useCase = new EmergencyRecoveryUseCase(
                 recoveryStartChain,
                 secretProtector,
                 stateStore,
-                credentialRotator);
+                credentialRotator,
+                mock(com.kerosene.auth.application.service.recovery.RecoveryRateLimitService.class));
 
         ReflectionTestUtils.setField(useCase, "requiredRecoveryCodes", 3);
         ReflectionTestUtils.setField(stateStore, "recoverySessionTtlMinutes", 10L);
@@ -167,7 +170,7 @@ class EmergencyRecoveryUseCaseTest {
                         "hash-6", "hash-7", "hash-8", "hash-9", "hash-10"));
 
         when(redisContract.getdelEmergencyRecoveryState("session-1")).thenReturn(state);
-        when(userGateway.findByUsername("alice")).thenReturn(user);
+        when(userGateway.findByUsernameForUpdate("alice")).thenReturn(user);
         when(cryptography.decrypt(any(byte[].class), any())).thenReturn("BASE32SECRET".getBytes(StandardCharsets.UTF_8));
         when(totpVerifier.totpMatcher("BASE32SECRET", "123456")).thenReturn(true);
         when(passkeyService.verifyRegistrationSignature(eq("alice"), eq("challenge-hex"), eq("signature"), any(byte[].class),

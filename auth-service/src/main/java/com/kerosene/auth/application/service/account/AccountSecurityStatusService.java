@@ -16,9 +16,12 @@ public class AccountSecurityStatusService {
     /** Projects registered and usable passkey details for the response. */
     private final PasskeyInventoryService passkeyInventoryService;
 
-    /** Creates the security status service. */
-    /** @param userService account lookup boundary */
-    /** @param passkeyInventoryService passkey inventory projection service */
+    /**
+     * Creates the security status service.
+     *
+     * @param userService account lookup boundary
+     * @param passkeyInventoryService passkey inventory projection service
+     */
     public AccountSecurityStatusService(
             UserServiceContract userService,
             PasskeyInventoryService passkeyInventoryService) {

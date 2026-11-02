@@ -2,6 +2,11 @@ package com.kerosene.auth.dto;
 
 /** Input contract for enabling, disabling, or resetting application PIN protection. */
 public class ConfigureAppPinRequestDTO {
+
+    /** Creates an empty PIN configuration bean for JSON deserialization. */
+    public ConfigureAppPinRequestDTO() {
+    }
+
     /** whether PIN verification should be enabled or disabled */
     private Boolean enabled;
     /** new PIN value when configuring or changing the verifier */

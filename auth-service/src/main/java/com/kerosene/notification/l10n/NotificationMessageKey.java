@@ -1,6 +1,15 @@
 package com.kerosene.notification.l10n;
 
 public enum NotificationMessageKey {
+    FINANCIAL_RECEIVE_DETECTED("notification.financial.financial_receive_detected"),
+    FINANCIAL_RECEIVE_CONFIRMED("notification.financial.financial_receive_confirmed"),
+    FINANCIAL_SEND_CONFIRMED("notification.financial.financial_send_confirmed"),
+    FINANCIAL_SEND_PROCESSING("notification.financial.financial_send_processing"),
+    FINANCIAL_SEND_BROADCAST("notification.financial.financial_send_broadcast"),
+    FINANCIAL_SEND_FAILED("notification.financial.financial_send_failed"),
+    FINANCIAL_RECEIVE_DROPPED("notification.financial.financial_receive_dropped"),
+    FINANCIAL_RECEIVE_REVERSED("notification.financial.financial_receive_reversed"),
+    FINANCIAL_RECONCILIATION("notification.financial.financial_reconciliation"),
     ACCOUNT_CREATED("notification.account.created"),
     SECURITY_LOGIN_DETECTED("notification.security.login_detected"),
     SECURITY_ADMIN_ACCESS_ATTEMPT("notification.security.admin_access_attempt"),

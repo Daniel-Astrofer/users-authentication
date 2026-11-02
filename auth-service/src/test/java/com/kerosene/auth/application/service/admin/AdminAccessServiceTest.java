@@ -48,7 +48,7 @@ class AdminAccessServiceTest {
         UUID attemptId = UUID.randomUUID();
         AdminAccessAttemptEntity attempt = approvedAttempt();
         when(attemptRepository.findForPollingById(attemptId)).thenReturn(Optional.of(attempt));
-        when(jwtServicer.generateToken(42L, List.of(UserRole.ADMIN.name()))).thenReturn("jwt-token");
+        when(jwtServicer.generateTokenAtCredentialEpoch(42L, List.of(UserRole.ADMIN.name()), 0L)).thenReturn("jwt-token");
 
         AdminLoginResponseDTO response = service.pollLogin(attemptId, "203.0.113.10", "Desktop Browser");
 
@@ -64,7 +64,7 @@ class AdminAccessServiceTest {
         UUID attemptId = UUID.randomUUID();
         AdminAccessAttemptEntity attempt = approvedAttempt();
         when(attemptRepository.findForPollingById(attemptId)).thenReturn(Optional.of(attempt));
-        when(jwtServicer.generateToken(42L, List.of(UserRole.ADMIN.name()))).thenReturn("jwt-token");
+        when(jwtServicer.generateTokenAtCredentialEpoch(42L, List.of(UserRole.ADMIN.name()), 0L)).thenReturn("jwt-token");
 
         service.pollLogin(attemptId, "203.0.113.10", "Desktop Browser");
         AdminLoginResponseDTO secondResponse = service.pollLogin(attemptId, "203.0.113.10", "Desktop Browser");
@@ -72,7 +72,7 @@ class AdminAccessServiceTest {
         assertNull(secondResponse.token());
         assertFalse(secondResponse.requiresMobileApproval());
         assertTrue(secondResponse.message().contains("ja foi utilizada"));
-        verify(jwtServicer).generateToken(42L, List.of(UserRole.ADMIN.name()));
+        verify(jwtServicer).generateTokenAtCredentialEpoch(42L, List.of(UserRole.ADMIN.name()), 0L);
     }
 
     @Test
@@ -87,7 +87,7 @@ class AdminAccessServiceTest {
         assertEquals("REDEEMED", response.status());
         assertNull(response.token());
         assertFalse(response.requiresMobileApproval());
-        verify(jwtServicer, never()).generateToken(anyLong(), anyCollection());
+        verify(jwtServicer, never()).generateTokenAtCredentialEpoch(anyLong(), anyCollection(), anyLong());
     }
 
     private AdminAccessAttemptEntity approvedAttempt() {

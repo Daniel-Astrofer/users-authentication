@@ -14,6 +14,15 @@ public class EmergencyRecoveryStartResponse {
     /** Number of distinct unused recovery codes required by policy. */
     private int requiredRecoveryCodes;
 
+    /** True when fresh canonical enrollment challenges can be obtained after authenticator setup. */
+    private boolean deviceKeyRecoverySupported;
+
+    public boolean isDeviceKeyRecoverySupported() { return deviceKeyRecoverySupported; }
+
+    public void setDeviceKeyRecoverySupported(boolean deviceKeyRecoverySupported) {
+        this.deviceKeyRecoverySupported = deviceKeyRecoverySupported;
+    }
+
     /** Creates an empty response for serializer-based construction. */
     public EmergencyRecoveryStartResponse() {
     }

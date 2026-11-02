@@ -61,8 +61,11 @@ public class LogoutCurrentSessionUseCase {
         REVOCATION_FAILED
     }
 
-    /** Immutable result wrapper returned by the logout use case. */
-    /** @param status outcome selected by the use case */
+    /**
+     * Immutable result wrapper returned by the logout use case.
+     *
+     * @param status outcome selected by the use case
+     */
     public record Result(Status status) {
     }
 }

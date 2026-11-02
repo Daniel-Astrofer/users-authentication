@@ -16,9 +16,11 @@ public class GetAccountSecurityProfileUseCase {
     /** Retrieves PIN configuration for the supplied device context. */
     private final AppPinService appPinService;
 
-    /** Creates the account security profile query. */
-    /** @param passkeyInventoryService passkey inventory projection service */
-    /** @param appPinService device-scoped PIN status service */
+    /**
+     * Creates the account security profile query.
+     * @param passkeyInventoryService passkey inventory projection service
+     * @param appPinService device-scoped PIN status service
+     */
     public GetAccountSecurityProfileUseCase(
             PasskeyInventoryService passkeyInventoryService,
             AppPinService appPinService) {
@@ -26,10 +28,12 @@ public class GetAccountSecurityProfileUseCase {
         this.appPinService = appPinService;
     }
 
-    /** Combines account fields, passkey inventory, and current-device PIN status into one profile. */
-    /** @param user account whose profile is requested */
-    /** @param deviceHash device reference used for PIN status */
-    /** @return assembled account security profile */
+    /**
+     * Combines account fields, passkey inventory, and current-device PIN status into one profile.
+     * @param user account whose profile is requested
+     * @param deviceHash device reference used for PIN status
+     * @return assembled account security profile
+     */
     public AccountSecurityProfileDTO execute(UserDataBase user, String deviceHash) {
         PasskeyInventoryDTO passkeys = passkeyInventoryService.inventoryFor(user);
         return AccountSecurityProfileDTO.fromUser(

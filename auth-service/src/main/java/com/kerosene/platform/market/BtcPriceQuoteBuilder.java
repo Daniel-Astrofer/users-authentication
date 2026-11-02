@@ -12,8 +12,13 @@ import java.util.Map;
  */
 public final class BtcPriceQuoteBuilder {
 
+    /** Prevents instantiation of this stateless quote factory. */
     private BtcPriceQuoteBuilder() {}
 
+    /** Builds the shared HTTP/STOMP quote map from the ticker service's current cached values.
+     * @param tickerService source of prices and 24-hour USD change
+     * @return quote map including BTC prices, derived USD/BRL rate, and generation time
+     */
     public static Map<String, Object> build(TickerService tickerService) {
         BigDecimal btcUsd = tickerService.getPrice("usd");
         BigDecimal btcBrl = tickerService.getPrice("brl");
@@ -39,8 +44,12 @@ public final class BtcPriceQuoteBuilder {
         return data;
     }
 
-    /**
-     * Build from freshly fetched CoinGecko values (before Redis round-trip).
+    /** Builds the quote map directly from newly fetched market values before Redis persistence.
+     * @param usd BTC price in US dollars
+     * @param brl BTC price in Brazilian reais
+     * @param eur BTC price in euros
+     * @param usdChange24h BTC price change over 24 hours, or null when unavailable
+     * @return quote map with the same field names as {@link #build(TickerService)}
      */
     public static Map<String, Object> buildFromFetched(
             BigDecimal usd,

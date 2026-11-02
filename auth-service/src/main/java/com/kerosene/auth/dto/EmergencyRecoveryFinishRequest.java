@@ -6,6 +6,10 @@ import com.fasterxml.jackson.annotation.JsonProperty.Access;
 /** Request that finishes recovery by presenting the session's TOTP and passkey proofs plus device metadata. */
 public class EmergencyRecoveryFinishRequest {
 
+    /** Creates an empty request for Jackson to populate from the recovery-finish JSON body. */
+    public EmergencyRecoveryFinishRequest() {
+    }
+
     /** Opaque identifier for the short-lived recovery state created by the start request. */
     private String recoverySessionId;
 
@@ -41,9 +45,19 @@ public class EmergencyRecoveryFinishRequest {
     private String platform;
     /** Browser identifier when recovery is performed in a browser. */
     private String browser;
-    /** When true (default for recovery), unlinks another account bound to this device. */
-    /** Explicit confirmation to unlink conflicting credentials on this installation; defaults to true for recovery. */
-    private boolean confirmUnlinkDevice = true;
+    /** Compatibility field. Recovery of one account does not authorize deletion of another account's credentials. */
+    private boolean confirmUnlinkDevice;
+
+    /** Canonical device-key registration proof, mutually exclusive with legacy passkey proof. */
+    private com.kerosene.auth.dto.devicekey.DeviceKeyRegistrationRequest deviceKeyRegistration;
+
+    public com.kerosene.auth.dto.devicekey.DeviceKeyRegistrationRequest getDeviceKeyRegistration() {
+        return deviceKeyRegistration;
+    }
+
+    public void setDeviceKeyRegistration(com.kerosene.auth.dto.devicekey.DeviceKeyRegistrationRequest deviceKeyRegistration) {
+        this.deviceKeyRegistration = deviceKeyRegistration;
+    }
 
     /**
      * Returns opaque identifier for the short-lived recovery state created by the start request..
@@ -302,7 +316,7 @@ public class EmergencyRecoveryFinishRequest {
     }
 
     /**
-     * Returns explicit confirmation to unlink conflicting credentials on this installation; defaults to true for recovery..
+     * Returns compatibility flag; emergency recovery never deletes foreign account credentials..
      * @return confirmUnlinkDevice value
      */
     public boolean isConfirmUnlinkDevice() {
@@ -310,7 +324,7 @@ public class EmergencyRecoveryFinishRequest {
     }
 
     /**
-     * Sets explicit confirmation to unlink conflicting credentials on this installation; defaults to true for recovery.
+     * Sets compatibility flag; emergency recovery never deletes foreign account credentials.
      * @param confirmUnlinkDevice confirmUnlinkDevice value
      */
     public void setConfirmUnlinkDevice(boolean confirmUnlinkDevice) {

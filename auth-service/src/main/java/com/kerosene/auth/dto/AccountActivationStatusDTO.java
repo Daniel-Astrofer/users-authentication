@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 
 /**
  * API projection of account activation and the current inbound-funding gate.
+ *
  * @param activated whether the account has completed activation
  * @param canReceiveInbound whether inbound platform funds are currently permitted
  * @param requiresActivationDeposit whether activation is still pending
@@ -56,10 +57,18 @@ public record AccountActivationStatusDTO(
      * Minimal persistence projection used to avoid loading a complete account entity.
      */
     public interface UserDataBaseView {
-        /** Reports whether activation is complete. @return current active state */
+        /**
+         * Reports whether activation is complete.
+         *
+         * @return current active state
+         */
         boolean isActive();
 
-        /** Returns the activation time. @return timestamp or null when inactive */
+        /**
+         * Returns the activation time.
+         *
+         * @return timestamp or null when inactive
+         */
         LocalDateTime activatedAt();
     }
 }

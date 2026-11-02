@@ -12,7 +12,14 @@ public enum NotificationKind {
     PAYMENT_REQUEST_PAID("payment_request_paid"),
     DEPOSIT_DETECTED("deposit_detected"),
     DEPOSIT_CONFIRMED("deposit_confirmed"),
-    PAYMENT_SENT("payment_sent");
+    PAYMENT_SENT("payment_sent"),
+    PAYMENT_PROCESSING("payment_processing"),
+    PAYMENT_BROADCAST("payment_broadcast"),
+    PAYMENT_CONFIRMED("payment_confirmed"),
+    PAYMENT_FAILED("payment_failed"),
+    PAYMENT_RECONCILIATION_REQUIRED("payment_reconciliation_required"),
+    DEPOSIT_DROPPED("deposit_dropped"),
+    DEPOSIT_REVERSED("deposit_reversed");
 
     private final String wireValue;
 

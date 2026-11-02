@@ -17,16 +17,24 @@ import java.util.Map;
 @Service
 public class BtcPriceEventPublisher {
 
+    /** Logger for websocket publication outcomes. */
     private static final Logger log = LoggerFactory.getLogger(BtcPriceEventPublisher.class);
 
+    /** STOMP topic receiving the public BTC quote map. */
     public static final String DESTINATION = "/topic/btc-price";
 
     private final SimpMessagingTemplate messagingTemplate;
 
+    /** Creates the publisher with an optional websocket transport.
+     * @param messagingTemplate provider that may be empty when messaging is disabled
+     */
     public BtcPriceEventPublisher(ObjectProvider<SimpMessagingTemplate> messagingTemplate) {
         this.messagingTemplate = messagingTemplate.getIfAvailable();
     }
 
+    /** Broadcasts a nonempty quote and logs transport failures without disrupting price retrieval.
+     * @param quote quote fields shared with the HTTP economy endpoint
+     */
     public void publish(Map<String, Object> quote) {
         if (messagingTemplate == null || quote == null || quote.isEmpty()) {
             return;

@@ -15,14 +15,18 @@ public class EmergencyRecoveryStartProofOfWorkHandler extends AbstractEmergencyR
     /** Verifies challenge freshness and proof-of-work difficulty. */
     private final PowService powService;
 
-    /** Creates the PoW validation step. */
-    /** @param powService challenge verifier */
+    /**
+     * Creates the PoW validation step.
+     * @param powService challenge verifier
+     */
     public EmergencyRecoveryStartProofOfWorkHandler(PowService powService) {
         this.powService = powService;
     }
 
-    /** Rejects invalid/expired proof and proceeds only after successful verification. */
-    /** @param context request containing challenge and nonce */
+    /**
+     * Rejects invalid/expired proof and proceeds only after successful verification.
+     * @param context request containing challenge and nonce
+     */
     @Override
     public void handle(EmergencyRecoveryStartContext context) {
         if (!powService.verifyChallenge(context.request().getChallenge(), context.request().getNonce())) {

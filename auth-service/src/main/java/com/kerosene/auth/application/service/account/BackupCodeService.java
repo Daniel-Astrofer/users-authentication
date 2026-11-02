@@ -29,9 +29,12 @@ public class BackupCodeService {
     /** Cryptographically secure source for recovery code values. */
     private final SecureRandom random = new SecureRandom();
 
-    /** Creates the backup-code service. */
-    /** @param userService account lookup and persistence */
-    /** @param hasher Argon2 code hasher */
+    /**
+     * Creates the backup-code service.
+     *
+     * @param userService account lookup and persistence boundary
+     * @param hasher Argon2 hasher used to persist only one-way code representations
+     */
     public BackupCodeService(
             UserServiceContract userService,
             @Qualifier("Argon2Hasher") Hasher hasher) {
@@ -39,18 +42,27 @@ public class BackupCodeService {
         this.hasher = hasher;
     }
 
-    /** Returns whether codes remain and how many, never returning stored hashes. */
-    /** @param userId account identifier */
-    /** @return status projection with an empty raw-code list */
+    /**
+     * Returns whether codes remain and how many, never returning stored hashes.
+     *
+     * @param userId account identifier whose recovery-code set is queried
+     * @return status projection with an empty raw-code list
+     * @throws IllegalStateException when the account no longer exists
+     */
     public BackupCodesStatusDTO getStatus(Long userId) {
         UserDataBase user = requireUser(userId);
         int remaining = user.getBackupCodes() != null ? user.getBackupCodes().size() : 0;
         return new BackupCodesStatusDTO(remaining > 0, remaining, List.of());
     }
 
-    /** Rotates the user's code set, persists only hashes, and returns new raw codes once. */
-    /** @param userId account identifier */
-    /** @return status and newly generated codes for one-time display */
+    /**
+     * Rotates the user's code set, persists only hashes, and returns new raw codes once.
+     * Previous codes are replaced as a set; returned raw values must be shown only at this point.
+     *
+     * @param userId account identifier whose recovery-code set is replaced
+     * @return status and newly generated codes for one-time display
+     * @throws IllegalStateException when the account no longer exists
+     */
     @Transactional
     public BackupCodesStatusDTO regenerate(Long userId) {
         UserDataBase user = requireUser(userId);
@@ -60,17 +72,24 @@ public class BackupCodeService {
         return new BackupCodesStatusDTO(true, generated.hashedCodes().size(), generated.rawCodes());
     }
 
-    /** Loads the account or reports that its authenticated identity is stale. */
-    /** @param userId account identifier */
-    /** @return persisted account */
-    /** @throws IllegalStateException when account lookup fails */
+    /**
+     * Loads the account or reports that its authenticated identity is stale.
+     *
+     * @param userId account identifier
+     * @return persisted account
+     * @throws IllegalStateException when account lookup fails
+     */
     private UserDataBase requireUser(Long userId) {
         return userService.buscarPorId(userId)
                 .orElseThrow(() -> new IllegalStateException("Authenticated user not found."));
     }
 
-    /** Generates random eight-digit codes, retains raw values for display, hashes the stored set, and zeroes character buffers. */
-    /** @return paired raw and encoded code lists */
+    /**
+     * Generates ten random eight-digit codes, retains raw values for the response, hashes the stored set,
+     * and zeroes each temporary character buffer after hashing.
+     *
+     * @return paired raw and encoded code lists in matching order
+     */
     private GeneratedBackupCodes generateBackupCodes() {
         List<String> rawCodes = new ArrayList<>();
         List<String> hashedCodes = new ArrayList<>();
@@ -91,6 +110,8 @@ public class BackupCodeService {
 
     /**
      * Holds raw codes for the response and their encoded counterparts for persistence.
+     * Raw values must not be persisted; the encoded list is the only account-side representation.
+     *
      * @param rawCodes codes disclosed once to the user
      * @param hashedCodes encoded values saved on the account
      */

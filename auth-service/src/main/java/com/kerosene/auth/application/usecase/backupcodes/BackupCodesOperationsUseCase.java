@@ -20,9 +20,12 @@ public class BackupCodesOperationsUseCase {
     /** Applies transaction-level authentication requirements before sensitive code rotation. */
     private final TransactionalAuthenticationPort transactionalAuthenticationPort;
 
-    /** Creates the backup-code operation with factor authorization and lifecycle boundaries. */
-    /** @param backupCodeService backup-code status and regeneration service */
-    /** @param transactionalAuthenticationPort authorization policy for account security changes */
+    /**
+     * Creates the backup-code operation with factor authorization and lifecycle boundaries.
+     *
+     * @param backupCodeService backup-code status and regeneration service
+     * @param transactionalAuthenticationPort authorization policy for account security changes
+     */
     public BackupCodesOperationsUseCase(
             BackupCodeService backupCodeService,
             TransactionalAuthenticationPort transactionalAuthenticationPort) {
@@ -30,9 +33,12 @@ public class BackupCodesOperationsUseCase {
         this.transactionalAuthenticationPort = transactionalAuthenticationPort;
     }
 
-    /** Returns backup-code availability and lifecycle status for the account. */
-    /** @param userId account identifier */
-    /** @return backup-code status projection */
+    /**
+     * Returns backup-code availability and lifecycle status for the account.
+     *
+     * @param userId account identifier
+     * @return backup-code status projection without raw codes or hashes
+     */
     public BackupCodesStatusDTO getStatus(Long userId) {
         return backupCodeService.getStatus(userId);
     }

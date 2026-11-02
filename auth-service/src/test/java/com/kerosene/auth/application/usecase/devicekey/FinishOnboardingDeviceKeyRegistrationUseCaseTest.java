@@ -75,7 +75,7 @@ class FinishOnboardingDeviceKeyRegistrationUseCaseTest {
         when(deviceKeyService.verifyRegistration(request, "session-1", "alice")).thenReturn(verified);
         when(finalizeSignupAccount.execute("session-1")).thenReturn(user);
         when(deviceKeyRepository.findByCredentialIdAndUserId("credential-1", 42L)).thenReturn(Optional.empty());
-        when(jwtServicer.generateToken(42L)).thenReturn("jwt-token");
+        when(jwtServicer.generateTokenAtCredentialEpoch(42L, java.util.List.of("USER"), 0L)).thenReturn("jwt-token");
 
         FinishOnboardingDeviceKeyRegistrationUseCase.Result result = useCase.execute("session-1", request);
 
@@ -120,7 +120,7 @@ class FinishOnboardingDeviceKeyRegistrationUseCaseTest {
         when(finalizeSignupAccount.execute("session-1")).thenReturn(user);
         when(deviceKeyRepository.findByCredentialIdAndUserId("credential-1", 42L))
                 .thenReturn(Optional.of(existingCredential));
-        when(jwtServicer.generateToken(42L)).thenReturn("jwt-token");
+        when(jwtServicer.generateTokenAtCredentialEpoch(42L, java.util.List.of("USER"), 0L)).thenReturn("jwt-token");
 
         FinishOnboardingDeviceKeyRegistrationUseCase.Result result = useCase.execute("session-1", request);
 

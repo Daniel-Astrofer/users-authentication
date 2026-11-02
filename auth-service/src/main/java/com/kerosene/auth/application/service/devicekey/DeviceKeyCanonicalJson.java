@@ -11,17 +11,25 @@ public final class DeviceKeyCanonicalJson {
     private DeviceKeyCanonicalJson() {
     }
 
-    /** Canonicalizes fields and encodes the resulting text as UTF-8. */
-    /** @param values simple string-keyed payload fields */
-    /** @return canonical UTF-8 bytes */
+    /**
+     * Canonicalizes fields and encodes the resulting text as UTF-8 for signature verification.
+     *
+     * @param values protocol payload fields
+     * @return deterministic compact JSON object encoded as UTF-8
+     * @throws IllegalArgumentException when any key or value is outside canonicalization v1
+     */
     public static byte[] utf8Bytes(Map<String, ?> values) {
         return canonicalize(values).getBytes(StandardCharsets.UTF_8);
     }
 
-    /** Sorts keys and renders only non-null strings, integral numbers, and booleans. */
-    /** @param values protocol payload fields */
-    /** @return deterministic compact JSON object */
-    /** @throws IllegalArgumentException when keys or values are outside canonicalization v1 */
+    /**
+     * Sorts keys lexicographically and renders only non-null strings, integral wrappers, and booleans.
+     * JSON is emitted without insignificant whitespace; null, floating point, nested, and arbitrary values are rejected.
+     *
+     * @param values protocol payload fields with non-empty string keys
+     * @return deterministic compact JSON object
+     * @throws IllegalArgumentException when keys are blank or values are unsupported by canonicalization v1
+     */
     public static String canonicalize(Map<String, ?> values) {
         TreeMap<String, Object> sorted = new TreeMap<>();
         values.forEach((key, value) -> {
@@ -46,9 +54,13 @@ public final class DeviceKeyCanonicalJson {
         return json.append('}').toString();
     }
 
-    /** Renders one supported primitive value without whitespace or locale-sensitive conversion. */
-    /** @param value non-null string, integral wrapper, or boolean */
-    /** @return JSON literal */
+    /**
+     * Renders one supported primitive value without whitespace or locale-sensitive conversion.
+     *
+     * @param value non-null string, integral wrapper, or boolean
+     * @return JSON literal representing the value
+     * @throws IllegalArgumentException when the runtime type is not supported by protocol v1
+     */
     private static String renderValue(Object value) {
         if (value instanceof String stringValue) {
             return quote(stringValue);
@@ -62,9 +74,12 @@ public final class DeviceKeyCanonicalJson {
         throw new IllegalArgumentException("Canonical JSON v1 only supports string, integer, and boolean values.");
     }
 
-    /** Escapes JSON string control characters and quotation marks. */
-    /** @param value source text */
-    /** @return quoted JSON string */
+    /**
+     * Escapes JSON string control characters, quotation marks, and backslashes.
+     *
+     * @param value source text to encode
+     * @return JSON string including opening and closing quotation marks
+     */
     private static String quote(String value) {
         StringBuilder out = new StringBuilder(value.length() + 2);
         out.append('"');

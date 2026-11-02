@@ -63,6 +63,29 @@ class ReleaseAttestationFilterTest {
         assertEquals(200, legacyAuditResponse.getStatus());
     }
 
+    @Test
+    void acceptsOutboundProofAndRejectsBodyTampering(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        var manifest = directory.resolve("release.json");
+        java.nio.file.Files.writeString(manifest, "{\"version\":\"test\"}");
+        String digest = "sha256:" + HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(java.nio.file.Files.readAllBytes(manifest)));
+        var outgoing = new org.springframework.mock.http.client.MockClientHttpRequest(
+                org.springframework.http.HttpMethod.POST, java.net.URI.create("https://auth/internal/kfe/users"));
+        byte[] body = "{\"message\":\"original\"}".getBytes(StandardCharsets.UTF_8);
+        var signer = new com.kerosene.common.security.workload.ReleaseAttestationRequestInterceptor(
+                manifest.toString(), SECRET, "spiffe://test/service/kfe");
+        signer.intercept(outgoing, body, (request, bytes) ->
+                new org.springframework.mock.http.client.MockClientHttpResponse(new byte[0], org.springframework.http.HttpStatus.OK));
+        for (boolean tampered : new boolean[] {false, true}) {
+            var incoming = new MockHttpServletRequest("POST", "/internal/kfe/users");
+            outgoing.getHeaders().forEach((name, values) -> values.forEach(value -> incoming.addHeader(name, value)));
+            incoming.setContent(tampered ? "changed".getBytes(StandardCharsets.UTF_8) : body);
+            var response = new MockHttpServletResponse();
+            filter(releaseManifestService(true, digest)).doFilter(incoming, response, new MockFilterChain());
+            assertEquals(tampered ? 403 : 200, response.getStatus());
+        }
+    }
+
     private ReleaseAttestationFilter filter(ReleaseManifestService releaseManifestService) {
         return new ReleaseAttestationFilter(
                 provider(releaseManifestService),

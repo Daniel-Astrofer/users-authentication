@@ -49,9 +49,10 @@ public class CosignerSecretService implements StringColumnCryptoPort {
     /** RAM-only master-key provider initialized after platform attestation. */
     private final VaultKeyProvider vaultKeyProvider;
 
-    /**
-     * Constructor injection only — no @Value, no disk reads.
-     * The masterKey lives in VaultKeyProvider's RAM.
+    /** Creates the service using the AES implementation and RAM-only master-key provider.
+     * The master key is obtained only from VaultKeyProvider and is never read from environment or disk.
+     * @param aes AES-256-GCM encryptor/decryptor
+     * @param vaultKeyProvider provider of the attested master key held in memory
      */
     public CosignerSecretService(AES256 aes, VaultKeyProvider vaultKeyProvider) {
         this.aes = aes;
@@ -109,9 +110,10 @@ public class CosignerSecretService implements StringColumnCryptoPort {
 
     /** Typed exception for encryption/decryption failures. */
     public static class CosignerEncryptionException extends RuntimeException {
-        /** Wraps the cryptographic cause without exposing secret material. */
-        /** @param message safe operation-level failure description */
-        /** @param cause underlying encoding, key, or cipher failure */
+        /** Wraps the cryptographic cause without exposing secret material.
+         * @param message safe operation-level failure description
+         * @param cause underlying encoding, key, or cipher failure
+         */
         public CosignerEncryptionException(String message, Throwable cause) {
             super(message, cause);
         }

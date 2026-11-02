@@ -483,7 +483,7 @@ public class PasskeyOrchestrator {
                             .body(ApiResponse.success("Passkey verified. TOTP required.", preAuthToken));
                 }
 
-                String token = user.getId() + " " + jwtServicer.generateToken(user.getId());
+                String token = user.getId() + " " + jwtServicer.generateTokenAtCredentialEpoch(user.getId(), java.util.List.of("USER"), user.getCredentialEpoch());
                 return ResponseEntity.ok(ApiResponse.success("Passkey authentication successful", token));
             } else {
                 logVerifyFailure(
@@ -503,6 +503,9 @@ public class PasskeyOrchestrator {
                         "Se esta passkey nao estiver disponivel neste dispositivo, entre com TOTP e vincule outra.");
             }
 
+        } catch (FinancialProviderUnavailableException
+                 | FinalizeSignupAccount.VaultNotReadyException exception) {
+            throw exception;
         } catch (Exception e) {
             logVerifyFailure(
                     "exception",
@@ -638,7 +641,7 @@ public class PasskeyOrchestrator {
                             "Account creation failed: " + exception.getMessage(),
                             ErrorCodes.SYS_INTERNAL_ERROR));
         }
-        String token = user.getId() + " " + jwtServicer.generateToken(user.getId());
+        String token = user.getId() + " " + jwtServicer.generateTokenAtCredentialEpoch(user.getId(), java.util.List.of("USER"), user.getCredentialEpoch());
         return ResponseEntity.ok(ApiResponse.success(
                 "Passkey linked and account created.",
                 token));

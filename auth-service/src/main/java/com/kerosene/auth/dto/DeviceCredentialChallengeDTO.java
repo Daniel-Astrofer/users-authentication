@@ -21,10 +21,11 @@ public record DeviceCredentialChallengeDTO(
         String algorithm,
         String canonicalization) {
 
-    /** Creates a legacy passkey challenge using its hexadecimal WebAuthn-style challenge representation. */
-    /** @param challengeHex hexadecimal passkey challenge */
-    /** @param expiresInSeconds remaining lifetime */
-    /** @return challenge DTO tagged as PASSKEY */
+    /** Creates a legacy passkey challenge using its hexadecimal WebAuthn-style challenge representation.
+     * @param challengeHex hexadecimal passkey challenge
+     * @param expiresInSeconds remaining lifetime
+     * @return challenge DTO tagged as PASSKEY
+     */
     public static DeviceCredentialChallengeDTO passkey(String challengeHex, long expiresInSeconds) {
         return new DeviceCredentialChallengeDTO(
                 "PASSKEY",
@@ -36,14 +37,15 @@ public record DeviceCredentialChallengeDTO(
                 null);
     }
 
-    /** Creates a device-key challenge with the canonicalization and signature contract needed by the client. */
-    /** @param challengeId opaque one-time challenge identifier */
-    /** @param challenge encoded challenge bytes */
-    /** @param expiresInSeconds remaining lifetime */
-    /** @param onionServiceId onion identity bound into the signed payload */
-    /** @param algorithm required signature algorithm */
-    /** @param canonicalization canonical payload format identifier */
-    /** @return challenge DTO tagged as DEVICE_KEY */
+    /** Creates a device-key challenge with the canonicalization and signature contract needed by the client.
+     * @param challengeId opaque one-time challenge identifier
+     * @param challenge encoded challenge bytes
+     * @param expiresInSeconds remaining lifetime
+     * @param onionServiceId onion identity bound into the signed payload
+     * @param algorithm required signature algorithm
+     * @param canonicalization canonical payload format identifier
+     * @return challenge DTO tagged as DEVICE_KEY
+     */
     public static DeviceCredentialChallengeDTO deviceKey(
             String challengeId,
             String challenge,

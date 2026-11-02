@@ -24,11 +24,13 @@ public class FinishAuthenticatedDeviceKeyRegistrationUseCase {
     /** Checks existing device-installation ownership before saving a new credential. */
     private final DeviceBindingPolicy deviceBindingPolicy;
 
-    /** Creates the authenticated registration completion operation. */
-    /** @param userRepository owner lookup */
-    /** @param deviceKeyRepository credential persistence */
-    /** @param deviceKeyService challenge response verifier */
-    /** @param deviceBindingPolicy device-installation ownership policy */
+    /**
+     * Creates the authenticated registration completion operation.
+     * @param userRepository owner lookup
+     * @param deviceKeyRepository credential persistence
+     * @param deviceKeyService challenge response verifier
+     * @param deviceBindingPolicy device-installation ownership policy
+     */
     public FinishAuthenticatedDeviceKeyRegistrationUseCase(
             UserRepository userRepository,
             DeviceKeyCredentialRepository deviceKeyRepository,
@@ -40,10 +42,12 @@ public class FinishAuthenticatedDeviceKeyRegistrationUseCase {
         this.deviceBindingPolicy = deviceBindingPolicy;
     }
 
-    /** Verifies registration for the loaded user, enforces device ownership, and persists a new key. */
-    /** @param userId authenticated principal identifier */
-    /** @param request signed registration response and device metadata */
-    /** @return registered, user-not-found, or device-already-bound outcome */
+    /**
+     * Verifies registration for the loaded user, enforces device ownership, and persists a new key.
+     * @param userId authenticated principal identifier
+     * @param request signed registration response and device metadata
+     * @return registered, user-not-found, or device-already-bound outcome
+     */
     @Transactional
     public Result execute(Long userId, DeviceKeyRegistrationRequest request) {
         UserDataBase user = userRepository.findById(userId).orElse(null);
@@ -64,9 +68,11 @@ public class FinishAuthenticatedDeviceKeyRegistrationUseCase {
         return Result.registered();
     }
 
-    /** Saves verified public credential material unless the same credential is already owned by the user. */
-    /** @param user existing account receiving the credential */
-    /** @param verified verified registration material and client metadata */
+    /**
+     * Saves verified public credential material unless the same credential is already owned by the user.
+     * @param user existing account receiving the credential
+     * @param verified verified registration material and client metadata
+     */
     private void persistDeviceKey(
             UserDataBase user,
             DeviceKeyService.VerifiedDeviceKeyRegistration verified) {
@@ -102,21 +108,27 @@ public class FinishAuthenticatedDeviceKeyRegistrationUseCase {
      */
     public record Result(Status status, DeviceAlreadyBoundDTO deviceAlreadyBound) {
 
-        /** Builds a successful registration result. */
-        /** @return registered result with no conflict payload */
+        /**
+         * Builds a successful registration result.
+         * @return registered result with no conflict payload
+         */
         public static Result registered() {
             return new Result(Status.REGISTERED, null);
         }
 
-        /** Builds the missing-user result. */
-        /** @return not-found result with no conflict payload */
+        /**
+         * Builds the missing-user result.
+         * @return not-found result with no conflict payload
+         */
         public static Result userNotFound() {
             return new Result(Status.USER_NOT_FOUND, null);
         }
 
-        /** Builds a result with device installation conflict details. */
-        /** @param payload conflict information for client confirmation */
-        /** @return device-already-bound result */
+        /**
+         * Builds a result with device installation conflict details.
+         * @param payload conflict information for client confirmation
+         * @return device-already-bound result
+         */
         public static Result deviceAlreadyBound(DeviceAlreadyBoundDTO payload) {
             return new Result(Status.DEVICE_ALREADY_BOUND, payload);
         }
