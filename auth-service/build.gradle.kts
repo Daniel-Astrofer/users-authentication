@@ -29,7 +29,7 @@ configurations.configureEach {
 }
 
 dependencies {
-    implementation("io.kerosene.contracts:kerosene-contracts:0.2.0-SNAPSHOT")
+    implementation("io.kerosene.contracts:kerosene-contracts:0.3.0")
     implementation("kerosene:kerosene-shared:PRE-ALPHA")
     implementation("io.jsonwebtoken:jjwt-api:0.13.0")
 
