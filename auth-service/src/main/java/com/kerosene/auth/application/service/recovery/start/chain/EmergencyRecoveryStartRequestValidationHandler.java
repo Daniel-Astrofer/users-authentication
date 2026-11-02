@@ -25,17 +25,21 @@ public class EmergencyRecoveryStartRequestValidationHandler extends AbstractEmer
     @Value("${auth.recovery.required-backup-codes:3}")
     private int requiredRecoveryCodes;
 
-    /** Creates request validation with signup credential and recovery-code policies. */
-    /** @param signupVerifier username and passphrase validator */
-    /** @param recoveryCodeService recovery-code normalization service */
+    /**
+     * Creates request validation with signup credential and recovery-code policies.
+     * @param signupVerifier username and passphrase validator
+     * @param recoveryCodeService recovery-code normalization service
+     */
     public EmergencyRecoveryStartRequestValidationHandler(SignupVerifier signupVerifier,
             RecoveryCodeService recoveryCodeService) {
         this.signupVerifier = signupVerifier;
         this.recoveryCodeService = recoveryCodeService;
     }
 
-    /** Validates request presence, account/passphrase rules, code count, and PoW challenge fields. */
-    /** @param context chain context receiving normalized username and recovery codes */
+    /**
+     * Validates request presence, account/passphrase rules, code count, and PoW challenge fields.
+     * @param context chain context receiving normalized username and recovery codes
+     */
     @Override
     public void handle(EmergencyRecoveryStartContext context) {
         EmergencyRecoveryStartRequest request = context.request();
@@ -74,16 +78,20 @@ public class EmergencyRecoveryStartRequestValidationHandler extends AbstractEmer
         handleNext(context);
     }
 
-    /** Trims and lowercases a username for identity lookup and rate-limit keys. */
-    /** @param username submitted username */
-    /** @return normalized username or null */
+    /**
+     * Trims and lowercases a username for identity lookup and rate-limit keys.
+     * @param username submitted username
+     * @return normalized username or null
+     */
     private String normalizeUsername(String username) {
         return username == null ? null : username.trim().toLowerCase();
     }
 
-    /** Makes a private mutable copy so passphrase policy checks do not mutate the request buffer. */
-    /** @param input request passphrase */
-    /** @return copied character array or null */
+    /**
+     * Makes a private mutable copy so passphrase policy checks do not mutate the request buffer.
+     * @param input request passphrase
+     * @return copied character array or null
+     */
     private char[] copyCharArray(char[] input) {
         if (input == null) {
             return null;

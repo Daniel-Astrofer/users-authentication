@@ -2,6 +2,10 @@ package com.kerosene.auth.dto.devicekey;
 
 /** Request carrying a device public key, signed enrollment proof, and device metadata. */
 public class DeviceKeyRegistrationRequest {
+    /** Creates an empty request for Jackson to populate from the registration JSON body. */
+    public DeviceKeyRegistrationRequest() {
+    }
+
     /** Encoded public key registered for later signature verification. */
     private String publicKey;
     /** Claimed SHA-256 fingerprint checked against the decoded public key. */

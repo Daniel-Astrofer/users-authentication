@@ -24,6 +24,12 @@ import com.kerosene.notification.model.NotificationSeverity;
 import com.kerosene.notification.service.NotificationService;
 
 import java.util.Map;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import com.kerosene.auth.application.service.devicekey.DeviceKeyService;
+import com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
+import com.kerosene.auth.model.entity.DeviceKeyCredential;
+import com.kerosene.auth.dto.devicekey.DeviceKeyChallengeResponse;
 
 /** Validates recovery completion proof and atomically replaces account authentication credentials. */
 @Service
@@ -43,6 +49,12 @@ public class RecoveryCredentialRotator {
     private final NotificationService notificationService;
     /** Enforces one-account-per-device installation binding before the new credential is saved. */
     private final DeviceBindingPolicy deviceBindingPolicy;
+    /** Existing canonical verifier; proof remains bound to the recovery session. */
+    private final DeviceKeyService deviceKeyService;
+    /** Revokes old canonical credentials and stores the verified replacement atomically. */
+    private final DeviceKeyCredentialRepository deviceKeyRepository;
+    @org.springframework.beans.factory.annotation.Value("${auth.recovery.required-backup-codes:3}")
+    private int requiredRecoveryCodes = 3;
 
     /** Creates the credential rotation service from proof, persistence, policy, and notification boundaries. */
     /** @param totpVerifier fresh authenticator code verifier */
@@ -58,7 +70,9 @@ public class RecoveryCredentialRotator {
             AuthPasskeyGateway passkeyGateway,
             RecoveryCodeService recoveryCodeService,
             NotificationService notificationService,
-            DeviceBindingPolicy deviceBindingPolicy) {
+            DeviceBindingPolicy deviceBindingPolicy,
+            DeviceKeyService deviceKeyService,
+            DeviceKeyCredentialRepository deviceKeyRepository) {
         this.totpVerifier = totpVerifier;
         this.passkeyService = passkeyService;
         this.userGateway = userGateway;
@@ -66,6 +80,8 @@ public class RecoveryCredentialRotator {
         this.recoveryCodeService = recoveryCodeService;
         this.notificationService = notificationService;
         this.deviceBindingPolicy = deviceBindingPolicy;
+        this.deviceKeyService = deviceKeyService;
+        this.deviceKeyRepository = deviceKeyRepository;
     }
 
     /** Requires a session ID, a fresh TOTP code, and complete replacement passkey proof/metadata. */
@@ -75,8 +91,24 @@ public class RecoveryCredentialRotator {
         if (request == null || request.getRecoverySessionId() == null || request.getRecoverySessionId().isBlank()) {
             throw new IllegalArgumentException("Recovery sessionId is required.");
         }
-        if (request.getTotpCode() == null || request.getTotpCode().isBlank()) {
+        if (request.getTotpCode() == null || !request.getTotpCode().matches("[0-9]{6}")) {
             throw new IllegalArgumentException("A fresh TOTP code from the new authenticator is required.");
+        }
+        if (request.getDeviceKeyRegistration() != null) {
+            var proof = request.getDeviceKeyRegistration();
+            if (request.getSignature() != null || request.getAuthData() != null
+                    || request.getClientDataJSON() != null || request.getPublicKey() != null
+                    || request.getPublicKeyCose() != null || request.getCredentialId() != null) {
+                throw new IllegalArgumentException("Recovery proof protocols must not be mixed.");
+            }
+            if (proof.getCredentialId() == null || proof.getCredentialId().isBlank()
+                    || proof.getPublicKey() == null || proof.getPublicKey().isBlank()
+                    || proof.getSignedPayload() == null || proof.getSignedPayload().isBlank()
+                    || proof.getSignature() == null || proof.getSignature().isBlank()
+                    || proof.getDeviceInstallId() == null || proof.getDeviceInstallId().isBlank()) {
+                throw new IllegalArgumentException("A complete canonical device-key proof is required.");
+            }
+            return;
         }
         if (request.getSignature() == null || request.getSignature().isBlank()
                 || request.getAuthData() == null || request.getAuthData().isBlank()
@@ -100,38 +132,36 @@ public class RecoveryCredentialRotator {
             String totpSecret) {
         validateFinishRequest(request);
 
-        UserDataBase user = userGateway.findByUsername(state.getUsername());
-        if (user == null) {
-            throw new AuthExceptions.RecoveryRejectedException("Recovery request rejected.");
+        UserDataBase user = userGateway.findByUsernameForUpdate(state.getUsername());
+        requireOwnerProof(state, user, totpSecret, request.getTotpCode());
+
+        DeviceKeyService.VerifiedDeviceKeyRegistration verifiedKey = null;
+        byte[] publicKeyBytes = null;
+        if (request.getDeviceKeyRegistration() != null) {
+            verifiedKey = deviceKeyService.verifyRegistration(request.getDeviceKeyRegistration(),
+                    state.getSessionId(), state.getUsername());
+            if (deviceKeyRepository.findByCredentialId(verifiedKey.credentialId()).isPresent()) {
+                throw new AuthExceptions.RecoveryRejectedException("Replacement credential identifier is already in use.");
+            }
+        } else {
+            publicKeyBytes = decodePasskeyPublicKey(request);
+            if (!passkeyService.verifyRegistrationSignature(state.getUsername(), state.getPasskeyChallenge(),
+                    request.getSignature(), publicKeyBytes, request.getAuthData(), request.getClientDataJSON())) {
+                throw new AuthExceptions.RecoveryRejectedException("The replacement passkey proof was invalid.");
+            }
         }
 
-        if (user.getBackupCodes() == null
-                || state.getMatchedBackupCodeHashes() == null
-                || !new HashSet<>(user.getBackupCodes()).containsAll(state.getMatchedBackupCodeHashes())) {
-            throw new AuthExceptions.RecoveryRejectedException(
-                    "Recovery request rejected. Existing recovery codes were already rotated.");
-        }
-
-        if (!totpVerifier.totpMatcher(totpSecret, request.getTotpCode())) {
-            throw new AuthExceptions.RecoveryRejectedException(
-                    "Recovery request rejected. The new authenticator proof was invalid.");
-        }
-
-        byte[] publicKeyBytes = decodePasskeyPublicKey(request);
-        if (!passkeyService.verifyRegistrationSignature(
-                state.getUsername(),
-                state.getPasskeyChallenge(),
-                request.getSignature(),
-                publicKeyBytes,
-                request.getAuthData(),
-                request.getClientDataJSON())) {
-            throw new AuthExceptions.RecoveryRejectedException(
-                    "Recovery request rejected. The new passkey proof was invalid.");
+        String installId = verifiedKey == null ? request.getDeviceInstallId() : verifiedKey.deviceInstallId();
+        // Recovery proves authority over this account only, never over a foreign installation owner.
+        DeviceAlreadyBoundDTO bindingConflict = deviceBindingPolicy.ensureDeviceAvailableForBind(installId, user.getId(), false);
+        if (bindingConflict != null) {
+            throw new AuthExceptions.RecoveryRejectedException("The installation belongs to another account.");
         }
 
         user.setPassphrase(state.getHashedPassphrase());
         user.setTOTPSecret(totpSecret);
         user.setFailedLoginAttempts(0);
+        user.advanceCredentialEpoch();
 
         RecoveryCodeService.GeneratedRecoveryCodes newBackupCodes = recoveryCodeService.generateNewBackupCodes();
         user.setBackupCodes(newBackupCodes.hashedCodes());
@@ -142,19 +172,18 @@ public class RecoveryCredentialRotator {
             passkeyGateway.deleteAll(existingCredentials);
         }
 
-        // One device → one account: claim this install for the recovering user (may DELETE other accounts' keys on it).
-        DeviceAlreadyBoundDTO bindingConflict = deviceBindingPolicy.ensureDeviceAvailableForBind(
-                request.getDeviceInstallId(),
-                user.getId(),
-                request.isConfirmUnlinkDevice());
-        if (bindingConflict != null) {
-            throw new AuthExceptions.RecoveryRejectedException(
-                    bindingConflict.message() != null
-                            ? bindingConflict.message()
-                            : "This device is bound to another account. Confirm unlink to continue recovery.");
+        var existingKeys = deviceKeyRepository.findByUserId(user.getId());
+        for (var oldKey : existingKeys) {
+            if ("REVOKED".equalsIgnoreCase(oldKey.getStatus())) continue;
+            oldKey.setStatus("REVOKED");
+            oldKey.setRevokedAt(LocalDateTime.now(ZoneOffset.UTC));
         }
-
-        passkeyGateway.save(buildPasskeyCredential(user, request, publicKeyBytes));
+        deviceKeyRepository.saveAll(existingKeys);
+        if (verifiedKey == null) {
+            passkeyGateway.save(buildPasskeyCredential(user, request, publicKeyBytes));
+        } else {
+            deviceKeyRepository.save(buildDeviceKeyCredential(user, verifiedKey));
+        }
 
         notificationService.notifyUser(
                 user.getId(),
@@ -167,7 +196,51 @@ public class RecoveryCredentialRotator {
                         String.valueOf(user.getId()),
                         Map.of("username", user.getUsername())));
 
-        return new RotationResult(user.getUsername(), newBackupCodes.rawCodes());
+        return new RotationResult(user.getUsername(), newBackupCodes.rawCodes(), verifiedKey == null ? null : verifiedKey.credentialId());
+    }
+
+    /** Issues a fresh short-lived challenge after validating the still-live session and replacement authenticator. */
+    public DeviceKeyChallengeResponse prepareDeviceKeyChallenge(EmergencyRecoveryState state,
+            String totpSecret, String totpCode) {
+        requireOwnerProof(state, userGateway.findByUsername(state.getUsername()), totpSecret, totpCode);
+        return deviceKeyService.startRegistrationChallenge(state.getSessionId(), state.getUsername());
+    }
+
+    private void requireOwnerProof(EmergencyRecoveryState state, UserDataBase user, String totpSecret, String totpCode) {
+        var hashes = state.getMatchedBackupCodeHashes();
+        if (user == null || user.getId() == null || user.getBackupCodes() == null || hashes == null
+                || requiredRecoveryCodes < 3 || hashes.size() < requiredRecoveryCodes
+                || hashes.stream().anyMatch(hash -> hash == null || hash.isBlank())
+                || new HashSet<>(hashes).size() != hashes.size()
+                || !new HashSet<>(user.getBackupCodes()).containsAll(hashes)) {
+            throw new AuthExceptions.RecoveryRejectedException("Recovery authority is missing or already rotated.");
+        }
+        if (totpCode == null || !totpCode.matches("[0-9]{6}") || !totpVerifier.totpMatcher(totpSecret, totpCode)) {
+            throw new AuthExceptions.RecoveryRejectedException("The new authenticator proof was invalid.");
+        }
+    }
+
+    private DeviceKeyCredential buildDeviceKeyCredential(UserDataBase user,
+            DeviceKeyService.VerifiedDeviceKeyRegistration verified) {
+        var credential = new DeviceKeyCredential();
+        credential.setUser(user);
+        credential.setCredentialId(verified.credentialId());
+        credential.setUserHandle(verified.userHandle());
+        credential.setPublicKeyEd25519(verified.publicKeyEd25519());
+        credential.setAlgorithm(DeviceKeyService.ALGORITHM);
+        credential.setCounter(verified.counter());
+        credential.setDeviceName(verified.deviceName());
+        credential.setDeviceInstallId(verified.deviceInstallId());
+        credential.setKeyStorage(verified.keyStorage());
+        credential.setPlatform(verified.platform());
+        credential.setBrowser(verified.browser());
+        credential.setBrand(verified.brand());
+        credential.setModel(verified.model());
+        credential.setSerialNumber(verified.serialNumber());
+        credential.setOnionServiceId(verified.onionServiceId());
+        credential.setProtocolVersion(1);
+        credential.setStatus("ACTIVE");
+        return credential;
     }
 
     /** Builds the persisted passkey entity from verified proof and client/device metadata. */
@@ -252,6 +325,6 @@ public class RecoveryCredentialRotator {
      * @param username account whose credentials were rotated
      * @param newBackupCodes raw replacement codes shown once
      */
-    public record RotationResult(String username, List<String> newBackupCodes) {
+    public record RotationResult(String username, List<String> newBackupCodes, String deviceKeyCredentialId) {
     }
 }

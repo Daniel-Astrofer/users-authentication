@@ -22,6 +22,18 @@ class KfeGatewayControllerTest {
     private RestTemplate restTemplate;
     private KfeGatewayController controller;
 
+    @Test
+    void springSelectsConfiguredTransportConstructor() {
+        try (var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
+            context.registerBean(com.kerosene.common.security.workload.InternalServiceRestTemplateFactory.class,
+                    () -> new com.kerosene.common.security.workload.InternalServiceRestTemplateFactory(
+                            new com.kerosene.common.security.workload.WorkloadIdentityProperties().toConfig(), null, "test"));
+            context.register(KfeGatewayController.class);
+            context.refresh();
+            assertThat(context.getBean(KfeGatewayController.class)).isNotNull();
+        }
+    }
+
     @BeforeEach
     void setUp() {
         restTemplate = mock(RestTemplate.class);

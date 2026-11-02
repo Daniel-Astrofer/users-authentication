@@ -25,6 +25,15 @@ public class DeviceCredentialReplayGuard {
     private final long failureWindowSeconds;
     private final long lockSeconds;
 
+    /**
+     * Creates a Redis-backed replay-failure counter and soft-lock policy.
+     * Invalid non-positive configuration values fall back to the documented defaults.
+     *
+     * @param redisService Redis operations for failure counters and lock markers
+     * @param failureThreshold consecutive failures required before a lock is set
+     * @param failureWindowSeconds lifetime of the failure counter before it expires
+     * @param lockSeconds duration of a soft-lock after the threshold is reached
+     */
     public DeviceCredentialReplayGuard(
             RedisServicer redisService,
             @Value("${kerosene.auth.device-cred.replay-failure-threshold:3}") int failureThreshold,
@@ -36,14 +45,32 @@ public class DeviceCredentialReplayGuard {
         this.lockSeconds = lockSeconds > 0 ? lockSeconds : 1200L;
     }
 
+    /**
+     * Returns the configured duration of a replay soft-lock.
+     *
+     * @return duration in seconds
+     */
     public long lockSeconds() {
         return lockSeconds;
     }
 
+    /**
+     * Returns the configured failure threshold.
+     *
+     * @return failures required to activate the soft-lock
+     */
     public int failureThreshold() {
         return failureThreshold;
     }
 
+    /**
+     * Checks whether Redis contains a soft-lock marker for the account and credential pair.
+     * Invalid or absent identifiers are treated as not locked.
+     *
+     * @param userId account identifier
+     * @param credentialRef privacy-preserving credential reference
+     * @return true while a lock marker exists
+     */
     public boolean isLocked(Long userId, String credentialRef) {
         if (userId == null || credentialRef == null || credentialRef.isBlank()) {
             return false;
@@ -52,7 +79,14 @@ public class DeviceCredentialReplayGuard {
     }
 
     /**
-     * @return true if a soft-lock is now active (threshold reached)
+     * Increments the credential's failure counter and creates a timed soft-lock at the threshold.
+     * The counter expires after the configured failure window; reaching the threshold clears it and
+     * stores a separate lock marker for the configured lock duration.
+     *
+     * @param userId account identifier
+     * @param credentialRef privacy-preserving credential reference
+     * @param factorKind label identifying the credential factor for audit logs
+     * @return true when this failure activates the soft-lock
      */
     public boolean recordReplayFailure(Long userId, String credentialRef, String factorKind) {
         if (userId == null || credentialRef == null || credentialRef.isBlank()) {
@@ -90,6 +124,12 @@ public class DeviceCredentialReplayGuard {
         return false;
     }
 
+    /**
+     * Clears the accumulated failure counter without removing an existing lock marker.
+     *
+     * @param userId account identifier
+     * @param credentialRef privacy-preserving credential reference
+     */
     public void clearFailures(Long userId, String credentialRef) {
         if (userId == null || credentialRef == null || credentialRef.isBlank()) {
             return;
@@ -97,6 +137,12 @@ public class DeviceCredentialReplayGuard {
         redisService.deleteValue(failKey(userId, credentialRef));
     }
 
+    /**
+     * Produces a log-safe fingerprint reference for raw credential identifier bytes.
+     *
+     * @param credentialId credential identifier bytes
+     * @return fingerprint reference, or {@code unknown} for absent input
+     */
     public static String credentialRefFromBytes(byte[] credentialId) {
         if (credentialId == null || credentialId.length == 0) {
             return "unknown";
@@ -104,6 +150,12 @@ public class DeviceCredentialReplayGuard {
         return LogSanitizer.fingerprint(credentialId);
     }
 
+    /**
+     * Trims and fingerprints a credential identifier string for Redis keys and logs.
+     *
+     * @param credentialId credential identifier
+     * @return fingerprint reference, or {@code unknown} for absent input
+     */
     public static String credentialRefFromString(String credentialId) {
         if (credentialId == null || credentialId.isBlank()) {
             return "unknown";
@@ -111,10 +163,12 @@ public class DeviceCredentialReplayGuard {
         return LogSanitizer.fingerprint(credentialId.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
+    /** Builds the Redis key for the expiring failure counter. */
     private static String failKey(Long userId, String credentialRef) {
         return FAIL_PREFIX + userId + ":" + credentialRef;
     }
 
+    /** Builds the Redis key for the timed replay soft-lock marker. */
     private static String lockKey(Long userId, String credentialRef) {
         return LOCK_PREFIX + userId + ":" + credentialRef;
     }

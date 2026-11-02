@@ -26,7 +26,7 @@ class IssueSessionTokenTest {
 
         UserDataBase user = new UserDataBase();
         ReflectionTestUtils.setField(user, "id", 7L);
-        when(jwtService.generateToken(eq(7L), anyCollection())).thenReturn("jwt-token");
+        when(jwtService.generateTokenAtCredentialEpoch(eq(7L), anyCollection(), eq(0L))).thenReturn("jwt-token");
 
         String result = issueSessionToken.issue(user);
 

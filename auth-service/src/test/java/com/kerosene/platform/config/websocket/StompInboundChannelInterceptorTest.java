@@ -38,7 +38,13 @@ class StompInboundChannelInterceptorTest {
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
         channel = mock(MessageChannel.class);
-        interceptor = new StompInboundChannelInterceptor(new StompInboundMessageHandlerChain(jwtServicer));
+        var sessions = new StompSessionAuthorization(jwtServicer);
+        interceptor = new StompInboundChannelInterceptor(new StompInboundMessageHandlerChain(jwtServicer, sessions), sessions);
+        when(jwtServicer.extractId("fixture-connection-token")).thenReturn(42L);
+        var connect = StompHeaderAccessor.create(StompCommand.CONNECT);
+        connect.setSessionId("fixture-authenticated-session");
+        connect.setNativeHeader("Authorization", "Bearer fixture-connection-token");
+        interceptor.preSend(message(connect), channel);
     }
 
     @AfterEach
@@ -84,6 +90,7 @@ class StompInboundChannelInterceptorTest {
     @Test
     void shouldRejectSubscribeWithoutAuthenticatedUser() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setSessionId("fixture-authenticated-session");
         accessor.setDestination("/topic/payment-request/123");
 
         assertThrows(MessageDeliveryException.class, () -> interceptor.preSend(message(accessor), channel));
@@ -92,6 +99,7 @@ class StompInboundChannelInterceptorTest {
     @Test
     void shouldRejectBalanceSubscribeForDifferentUser() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setSessionId("fixture-authenticated-session");
         accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
         accessor.setDestination("/topic/balance/99");
 
@@ -101,6 +109,7 @@ class StompInboundChannelInterceptorTest {
     @Test
     void shouldAllowBalanceSubscribeForSameUser() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setSessionId("fixture-authenticated-session");
         accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
         accessor.setDestination("/topic/balance/42");
 
@@ -112,6 +121,7 @@ class StompInboundChannelInterceptorTest {
     @Test
     void shouldRejectLegacyPaymentRequestTopic() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setSessionId("fixture-authenticated-session");
         accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
         accessor.setDestination("/topic/payment-request/req-1");
 
@@ -121,6 +131,7 @@ class StompInboundChannelInterceptorTest {
     @Test
     void shouldAllowUserQueueSubscribeForAuthenticatedUser() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setSessionId("fixture-authenticated-session");
         accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
         accessor.setDestination("/user/queue/balance");
 
@@ -132,6 +143,7 @@ class StompInboundChannelInterceptorTest {
     @Test
     void shouldAllowTransactionsQueueSubscribeForAuthenticatedUser() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setSessionId("fixture-authenticated-session");
         accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
         accessor.setDestination("/user/queue/transactions");
 
@@ -143,6 +155,7 @@ class StompInboundChannelInterceptorTest {
     @Test
     void shouldAllowBtcPriceTopicSubscribeForAuthenticatedUser() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setSessionId("fixture-authenticated-session");
         accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
         accessor.setDestination("/topic/btc-price");
 

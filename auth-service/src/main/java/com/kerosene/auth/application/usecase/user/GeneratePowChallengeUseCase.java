@@ -12,8 +12,10 @@ public class GeneratePowChallengeUseCase {
     /** Generator that creates the challenge material consumed by the client-side PoW flow. */
     private final PowService powService;
 
-    /** Creates the challenge use case. */
-    /** @param powService proof-of-work challenge generator */
+    /**
+     * Creates the challenge use case.
+     * @param powService proof-of-work challenge generator
+     */
     public GeneratePowChallengeUseCase(PowService powService) {
         this.powService = powService;
     }

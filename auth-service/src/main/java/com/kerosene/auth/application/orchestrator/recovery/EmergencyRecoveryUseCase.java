@@ -40,24 +40,29 @@ public class EmergencyRecoveryUseCase {
     private final RecoveryStateStore stateStore;
     /** Validates completion data and rotates existing authentication credentials. */
     private final RecoveryCredentialRotator credentialRotator;
+    /** Bounds challenge preparation, including invalid guesses, per proven recovery session. */
+    private final com.kerosene.auth.application.service.recovery.RecoveryRateLimitService rateLimitService;
 
     /** Minimum number of backup recovery-code hashes required by the configured start chain. */
     @Value("${auth.recovery.required-backup-codes:3}")
     private int requiredRecoveryCodes;
 
-    /** Creates the emergency recovery coordinator. */
-    /** @param recoveryStartChain proof-validation chain for recovery initiation */
-    /** @param secretProtector replacement secret protection service */
-    /** @param stateStore recovery session persistence boundary */
-    /** @param credentialRotator credential replacement operation */
+    /** Creates the emergency recovery coordinator.
+     * @param recoveryStartChain proof-validation chain for recovery initiation
+     * @param secretProtector replacement secret protection service
+     * @param stateStore recovery session persistence boundary
+     * @param credentialRotator credential replacement operation
+     */
     public EmergencyRecoveryUseCase(EmergencyRecoveryStartChain recoveryStartChain,
             RecoverySecretProtector secretProtector,
             RecoveryStateStore stateStore,
-            RecoveryCredentialRotator credentialRotator) {
+            RecoveryCredentialRotator credentialRotator,
+            com.kerosene.auth.application.service.recovery.RecoveryRateLimitService rateLimitService) {
         this.recoveryStartChain = recoveryStartChain;
         this.secretProtector = secretProtector;
         this.stateStore = stateStore;
         this.credentialRotator = credentialRotator;
+        this.rateLimitService = rateLimitService;
     }
 
     /**
@@ -79,12 +84,28 @@ public class EmergencyRecoveryUseCase {
         log.warn("[Recovery] Emergency recovery initiated for userRef={} using {} recovery codes.",
                 LogSanitizer.fingerprint(context.normalizedUsername()), context.matchedRecoveryCodeHashes().size());
 
-        return new EmergencyRecoveryStartResponse(
+        var response = new EmergencyRecoveryStartResponse(
                 session.sessionId(),
                 secrets.otpUri(),
                 session.passkeyChallenge(),
                 session.expiresInSeconds(),
                 requiredRecoveryCodes);
+        response.setDeviceKeyRecoverySupported(true);
+        return response;
+    }
+
+    /** Prepares the short-lived enrollment proof only when the new authenticator is ready. */
+    public com.kerosene.auth.dto.devicekey.DeviceKeyChallengeResponse prepareDeviceKeyChallenge(
+            com.kerosene.auth.dto.EmergencyRecoveryDeviceKeyChallengeRequest request) {
+        if (request == null || request.getRecoverySessionId() == null || request.getRecoverySessionId().isBlank()
+                || request.getRecoverySessionId().length() > 128
+                || request.getTotpCode() == null || !request.getTotpCode().matches("[0-9]{6}")) {
+            throw new IllegalArgumentException("A recovery session and fresh authenticator code are required.");
+        }
+        var state = stateStore.readRequired(request.getRecoverySessionId());
+        rateLimitService.enforceDeviceKeyChallengeAttempt(request.getRecoverySessionId());
+        return credentialRotator.prepareDeviceKeyChallenge(state,
+                secretProtector.recoverTotpSecret(state.getEncryptedTotpSecret()), request.getTotpCode());
     }
 
     /**
@@ -104,7 +125,9 @@ public class EmergencyRecoveryUseCase {
 
         log.warn("[Recovery] Emergency recovery finished for userRef={}. Old credentials rotated.",
                 LogSanitizer.fingerprint(result.username()));
-        return new EmergencyRecoveryFinishResponse(result.username(), result.newBackupCodes());
+        var response = new EmergencyRecoveryFinishResponse(result.username(), result.newBackupCodes());
+        response.setDeviceKeyCredentialId(result.deviceKeyCredentialId());
+        return response;
     }
 
     /**

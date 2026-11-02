@@ -26,10 +26,24 @@ public interface AdminAccessAttemptRepository extends JpaRepository<AdminAccessA
     @Query("select attempt from AdminAccessAttemptEntity attempt where attempt.id = :id")
     Optional<AdminAccessAttemptEntity> findForPollingById(@Param("id") UUID id);
 
-    /** Finds an attempt only when it belongs to the supplied user. */
+    /**
+     * Finds an attempt only when it belongs to the supplied user, preventing cross-account lookup.
+     *
+     * @param id access-attempt identifier
+     * @param userId owning account identifier
+     * @return matching attempt, or empty when absent or owned by another account
+     */
     Optional<AdminAccessAttemptEntity> findByIdAndUserId(UUID id, Long userId);
 
-    /** Lists unexpired attempts for one user and state, newest request first. */
+    /**
+     * Lists attempts matching one user's state whose expiry is strictly after the supplied time.
+     * Results are ordered newest request first for approval-device polling.
+     *
+     * @param userId owning account identifier
+     * @param status lifecycle state to select
+     * @param now comparison time; rows expiring exactly at this instant are excluded
+     * @return matching attempts ordered by request time descending
+     */
     List<AdminAccessAttemptEntity> findByUserIdAndStatusAndExpiresAtAfterOrderByRequestedAtDesc(
             Long userId,
             AdminAccessAttemptStatus status,

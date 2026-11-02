@@ -13,12 +13,20 @@ import java.util.Arrays;
 @Component("aes256")
 public class AES256 implements Cryptography {
 
+    /** Creates an AES-GCM encryptor; each encryption call creates a fresh nonce. */
+    public AES256() {
+    }
 
-    /** Encrypts bytes with AES/GCM/NoPadding using a fresh random 96-bit nonce. */
-    /** @param totpSecret plaintext bytes, commonly a TOTP secret */
-    /** @param key AES key supplied by the secure key provider */
-    /** @return concatenation of nonce and authenticated ciphertext */
-    /** @throws Exception if the cipher cannot initialize or encrypt */
+
+    /**
+     * Encrypts bytes with AES/GCM/NoPadding using a fresh random 96-bit nonce and 128-bit tag.
+     * The nonce is prefixed to the ciphertext so {@link #decrypt(byte[], SecretKey)} can recover it.
+     *
+     * @param totpSecret plaintext bytes, commonly a TOTP secret
+     * @param key AES key supplied by the secure key provider
+     * @return concatenation of nonce and authenticated ciphertext
+     * @throws Exception if the cipher cannot initialize or encrypt
+     */
     public byte[] encrypt(byte[] totpSecret, SecretKey key) throws Exception {
 
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -38,11 +46,15 @@ public class AES256 implements Cryptography {
 
     }
 
-    /** Splits the nonce prefix from ciphertext and authenticates/decrypts the payload. */
-    /** @param hash concatenated nonce and AES-GCM ciphertext */
-    /** @param key AES key used for encryption */
-    /** @return recovered plaintext bytes */
-    /** @throws Exception for truncated, tampered, or otherwise invalid ciphertext */
+    /**
+     * Splits the 12-byte nonce prefix from the payload and authenticates/decrypts the ciphertext.
+     * GCM authentication failure is propagated by the cipher; truncated input also fails during parsing.
+     *
+     * @param hash concatenated nonce and AES-GCM ciphertext with authentication tag
+     * @param key AES key corresponding to the encryption key
+     * @return recovered plaintext bytes
+     * @throws Exception for truncated, tampered, or otherwise invalid ciphertext or key
+     */
     public byte[] decrypt(byte[] hash, SecretKey key) throws Exception {
 
         byte[] iv = Arrays.copyOfRange(hash, 0, 12);

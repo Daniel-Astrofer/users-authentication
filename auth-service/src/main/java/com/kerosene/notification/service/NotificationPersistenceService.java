@@ -27,6 +27,11 @@ public class NotificationPersistenceService {
 
     @Transactional
     public NotificationEntity persist(Long userId, UserNotificationPayload payload) {
+        return persist(userId, payload, true);
+    }
+
+    @Transactional
+    public NotificationEntity persist(Long userId, UserNotificationPayload payload, boolean dispatch) {
         NotificationEntity entity = new NotificationEntity();
         entity.setUserId(userId);
         entity.setKind(payload.kind());
@@ -52,7 +57,7 @@ public class NotificationPersistenceService {
             payloadMap.put("timestamp", zulu);
         }
 
-        eventPublisher.publishEvent(new NotificationPersistedEvent(userId, payloadMap));
+        if (dispatch) eventPublisher.publishEvent(new NotificationPersistedEvent(userId, payloadMap));
         return saved;
     }
 

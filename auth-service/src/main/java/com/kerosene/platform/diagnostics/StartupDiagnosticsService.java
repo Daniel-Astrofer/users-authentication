@@ -21,9 +21,9 @@ public class StartupDiagnosticsService {
     private static final List<String> REQUIRED_REDIS_PROPERTIES = List.of(
             "spring.data.redis.host",
             "spring.data.redis.port");
-    private static final List<String> REQUIRED_VAULT_MESH_PROPERTIES = List.of(
-            "kfe.vaultmesh.enabled",
-            "kfe.vaultmesh.base-url");
+    private static final List<String> REQUIRED_INTERNAL_SERVICE_PROPERTIES = List.of(
+            "kfe.internal.base-url",
+            "kfe.remote.base-url");
     private static final List<String> REQUIRED_LND_PROPERTIES = List.of(
             "lightning.lnd.enabled",
             "lightning.lnd.host",
@@ -38,17 +38,15 @@ public class StartupDiagnosticsService {
             "app.cors.allowed-origins",
             "webauthn.relying-party-id",
             "webauthn.origins",
-            "bitcoin.rpc.url",
-            "bitcoin.rpc.username",
-            "bitcoin.rpc.password",
-            "bitcoin.platform.master-xpub",
             "shard.attestation.secret",
-            "kfe.vaultmesh.base-url",
-            "lightning.lnd.host",
-            "lightning.lnd.tls.cert-path");
+            "kfe.internal.base-url",
+            "kfe.remote.base-url",
+            "kerosene.workload-identity.socket",
+            "kerosene.workload-identity.own-spiffe-id",
+            "kerosene.workload-identity.peer-spiffe-id");
     private static final List<String> PROD_TRUE_PROPERTIES = List.of(
             "kfe.vaultmesh.enabled",
-            "lightning.lnd.enabled",
+            "kerosene.workload-identity.enabled",
             "bitcoin.rpc.enabled",
             "bitcoin.rpc.required",
             "bitcoin.rpc.pruned-required",
@@ -56,6 +54,7 @@ public class StartupDiagnosticsService {
             "release.attestation.required",
             "release.attestation.remote.enabled");
     private static final List<String> PROD_FALSE_PROPERTIES = List.of(
+            "lightning.lnd.enabled",
             "bitcoin.mock-mode",
             "custody.mock-mode",
             "quorum.allow-local-simulation",
@@ -79,8 +78,10 @@ public class StartupDiagnosticsService {
         checks.add(checkProfiles());
         checks.add(requiredProperties("datasource", REQUIRED_DATASOURCE_PROPERTIES));
         checks.add(requiredProperties("redis", REQUIRED_REDIS_PROPERTIES));
-        checks.add(requiredProperties("vaultMesh", REQUIRED_VAULT_MESH_PROPERTIES));
-        checks.add(requiredProperties("lnd", REQUIRED_LND_PROPERTIES));
+        checks.add(requiredProperties("kfeTransport", REQUIRED_INTERNAL_SERVICE_PROPERTIES));
+        checks.add(environment.getProperty("lightning.lnd.enabled", Boolean.class, false)
+                ? requiredProperties("lnd", REQUIRED_LND_PROPERTIES)
+                : ok("lnd", "Lightning disabled by custody policy", List.of("lightning.lnd.enabled")));
         checks.add(requiredProperties("kfe", REQUIRED_KFE_PROPERTIES));
         checks.add(checkFlywayBaselineSafety());
         checks.add(checkProductionSafety());
@@ -138,10 +139,7 @@ public class StartupDiagnosticsService {
         if (corsOrigins.contains("localhost") || corsOrigins.contains("127.0.0.1")) {
             violations.add("app.cors.allowed-origins must not contain localhost");
         }
-        if (environment.getProperty("lightning.lnd.macaroon", "").isBlank()
-                && environment.getProperty("lightning.lnd.macaroon-path", "").isBlank()) {
-            violations.add("lightning.lnd.macaroon or lightning.lnd.macaroon-path required");
-        }
+
 
         if (violations.isEmpty()) {
             return ok("prod-safety", "production safety properties pass", List.of());

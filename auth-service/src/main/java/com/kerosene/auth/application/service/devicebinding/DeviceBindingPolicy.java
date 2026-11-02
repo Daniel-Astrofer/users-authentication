@@ -36,6 +36,12 @@ public class DeviceBindingPolicy {
     private final PasskeyCredentialRepository passkeyCredentialRepository;
     private final DeviceKeyCredentialRepository deviceKeyCredentialRepository;
 
+    /**
+     * Creates the binding policy over the two credential stores that claim device installations.
+     *
+     * @param passkeyCredentialRepository passkey credential lookup and deletion boundary
+     * @param deviceKeyCredentialRepository device-key credential lookup and deletion boundary
+     */
     public DeviceBindingPolicy(
             PasskeyCredentialRepository passkeyCredentialRepository,
             DeviceKeyCredentialRepository deviceKeyCredentialRepository) {
@@ -46,6 +52,10 @@ public class DeviceBindingPolicy {
     /**
      * Read-only conflict probe. Runs outside any outer write transaction so callers can return
      * AUTH_024 without marking the outer TX rollback-only.
+     *
+     * @param deviceInstallId submitted install identifier, optionally absent
+     * @param targetUserId account attempting to claim the install; null during signup
+     * @return masked conflict payload for a different active owner, or null if there is no conflict
      */
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     public DeviceAlreadyBoundDTO findBindingConflict(String deviceInstallId, Long targetUserId) {
@@ -70,6 +80,9 @@ public class DeviceBindingPolicy {
      * When true, deletes all credentials on that install that do not belong to the target user
      * (or all credentials when target is null / signup).
      *
+     * @param deviceInstallId install identifier being claimed
+     * @param targetUserId account claiming the install, or null before account creation
+     * @param confirmUnlinkDevice whether the user explicitly confirmed removal of the prior binding
      * @return null if binding may proceed; otherwise the conflict payload for AUTH_024
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -115,6 +128,9 @@ public class DeviceBindingPolicy {
      * that will be rebound — recovery already replaces passkeys; also wipe device-keys for those installs
      * owned only by this user is handled by delete-all passkeys. Call when a new credential is about
      * to claim an install after full user credential wipe.
+     *
+     * @param deviceInstallId installation identifier to make available to the recovering account
+     * @param recoveringUserId recovering account identifier
      */
     @Transactional
     public void releaseInstallForRecovery(String deviceInstallId, Long recoveringUserId) {
@@ -126,6 +142,14 @@ public class DeviceBindingPolicy {
         ensureDeviceAvailableForBind(installId, recoveringUserId, true);
     }
 
+    /**
+     * Finds the first account owning an active passkey or device-key credential for this installation.
+     * Passkeys are checked before device keys; missing, blank, or inactive credential status is treated
+     * as active by the legacy {@link #isActive(String)} compatibility rule.
+     *
+     * @param deviceInstallId install identifier to search
+     * @return owner projection, or null when no active credential is found
+     */
     public DeviceOwner findActiveOwner(String deviceInstallId) {
         String installId = normalizeInstallId(deviceInstallId);
         if (installId == null) {
@@ -154,6 +178,12 @@ public class DeviceBindingPolicy {
         return null;
     }
 
+    /**
+     * Deletes all passkey and device-key credentials associated with a normalized installation ID.
+     *
+     * @param deviceInstallId install identifier whose credentials are removed
+     * @return total number of removed passkey and device-key rows; zero for a missing identifier
+     */
     @Transactional
     public int deleteAllCredentialsForInstall(String deviceInstallId) {
         String installId = normalizeInstallId(deviceInstallId);
@@ -165,6 +195,12 @@ public class DeviceBindingPolicy {
         return passkeys + deviceKeys;
     }
 
+    /**
+     * Deletes only this account's passkey and device-key credentials for the installation.
+     *
+     * @param deviceInstallId install identifier shared by the selected credentials
+     * @param userId owner account whose credentials should be removed
+     */
     @Transactional
     public void deleteCredentialsForUserAndInstall(String deviceInstallId, Long userId) {
         String installId = normalizeInstallId(deviceInstallId);
@@ -175,6 +211,7 @@ public class DeviceBindingPolicy {
         deviceKeyCredentialRepository.deleteByUserIdAndDeviceInstallId(userId, installId);
     }
 
+    /** Deletes active credentials on the installation whose owner differs from the retained account. */
     private void deleteCredentialsForInstallExceptUser(String installId, Long userId) {
         List<PasskeyCredential> passkeys =
                 passkeyCredentialRepository.findActiveByDeviceInstallId(installId);
@@ -201,6 +238,12 @@ public class DeviceBindingPolicy {
         }
     }
 
+    /**
+     * Trims the installation identifier and maps null or blank values to null.
+     *
+     * @param deviceInstallId raw install identifier supplied by the caller
+     * @return trimmed identifier, or null when absent
+     */
     public static String normalizeInstallId(String deviceInstallId) {
         if (deviceInstallId == null) {
             return null;
@@ -209,6 +252,12 @@ public class DeviceBindingPolicy {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    /**
+     * Masks a username for conflict responses while retaining at most a short prefix and final character.
+     *
+     * @param username account name to mask
+     * @return masked value; blank input becomes {@code ***}
+     */
     public static String maskUsername(String username) {
         if (username == null || username.isBlank()) {
             return "***";
@@ -223,11 +272,18 @@ public class DeviceBindingPolicy {
         return normalized.substring(0, 2) + "***" + normalized.substring(normalized.length() - 1);
     }
 
+    /** Treats null/blank legacy status as active and otherwise accepts only the ACTIVE label. */
     private static boolean isActive(String status) {
         return status == null
                 || status.isBlank()
                 || "ACTIVE".equalsIgnoreCase(status.trim());
     }
 
+    /**
+     * Minimal owner details used to report an existing device binding without exposing credential data.
+     *
+     * @param userId owning account identifier
+     * @param username account name, which must be masked before being returned to a different account
+     */
     public record DeviceOwner(Long userId, String username) {}
 }

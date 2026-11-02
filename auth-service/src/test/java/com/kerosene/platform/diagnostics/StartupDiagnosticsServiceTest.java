@@ -56,6 +56,26 @@ class StartupDiagnosticsServiceTest {
         assertThat(report.toLogSummary()).contains("flyway:WARN");
     }
 
+    @Test
+    void productionDiagnosticsFollowAuthOwnershipAndDisabledLightning() {
+        var environment = baseEnvironment()
+                .withProperty("lightning.lnd.enabled", "false")
+                .withProperty("app.cors.allowed-origins", "https://app.kerosene.test")
+                .withProperty("webauthn.relying-party-id", "app.kerosene.test")
+                .withProperty("webauthn.origins", "https://app.kerosene.test")
+                .withProperty("shard.attestation.secret", "test")
+                .withProperty("kerosene.workload-identity.enabled", "true")
+                .withProperty("kerosene.workload-identity.socket", "unix:///run/spire.sock")
+                .withProperty("kerosene.workload-identity.own-spiffe-id", "spiffe://test/service/auth")
+                .withProperty("kerosene.workload-identity.peer-spiffe-id", "spiffe://test/service/kfe");
+        for (String key : java.util.List.of("kfe.vaultmesh.enabled", "bitcoin.rpc.enabled", "bitcoin.rpc.required",
+                "bitcoin.rpc.pruned-required", "tor.health.required", "release.attestation.required", "release.attestation.remote.enabled")) {
+            environment.withProperty(key, "true");
+        }
+        environment.setActiveProfiles("prod");
+        assertThat(new StartupDiagnosticsService(environment).diagnose().failCount()).isZero();
+    }
+
     private MockEnvironment baseEnvironment() {
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("spring.datasource.url", "jdbc:postgresql://db:5432/kerosene")
@@ -63,6 +83,8 @@ class StartupDiagnosticsServiceTest {
                 .withProperty("spring.datasource.password", "change-me")
                 .withProperty("spring.data.redis.host", "redis")
                 .withProperty("spring.data.redis.port", "6379")
+                .withProperty("kfe.internal.base-url", "https://kfe:8443")
+                .withProperty("kfe.remote.base-url", "https://kfe:8443")
                 .withProperty("kfe.vaultmesh.enabled", "false")
                 .withProperty("kfe.vaultmesh.base-url", "http://127.0.0.1:7701")
                 .withProperty("lightning.lnd.enabled", "true")

@@ -18,6 +18,7 @@ import com.kerosene.auth.dto.AccountSecurityUpdateRequestDTO;
 import com.kerosene.auth.model.entity.UserDataBase;
 import com.kerosene.common.dto.ApiResponse;
 
+/** Authenticated HTTP API for reading and updating a user's account security profile. */
 @RestController
 @RequestMapping("/auth/security")
 public class AccountSecurityController {
@@ -26,6 +27,13 @@ public class AccountSecurityController {
     private final GetAccountSecurityProfileUseCase getAccountSecurityProfileUseCase;
     private final UpdateAccountSecurityProfileUseCase updateAccountSecurityProfileUseCase;
 
+    /**
+     * Creates the controller with account lookup and profile use-case boundaries.
+     *
+     * @param userService resolves the authenticated account entity
+     * @param getAccountSecurityProfileUseCase reads the current profile and device-scoped settings
+     * @param updateAccountSecurityProfileUseCase validates and persists requested profile changes
+     */
     public AccountSecurityController(
             UserServiceContract userService,
             GetAccountSecurityProfileUseCase getAccountSecurityProfileUseCase,
@@ -35,6 +43,12 @@ public class AccountSecurityController {
         this.updateAccountSecurityProfileUseCase = updateAccountSecurityProfileUseCase;
     }
 
+    /**
+     * Reads the authenticated user's security profile, optionally scoped to a known device hash.
+     *
+     * @param deviceHash optional device binding context for device-specific settings
+     * @return profile response envelope
+     */
     @GetMapping("/profile")
     public ResponseEntity<ApiResponse<AccountSecurityProfileDTO>> getProfile(
             @RequestHeader(value = "X-Device-Hash", required = false) String deviceHash) {
@@ -44,6 +58,13 @@ public class AccountSecurityController {
                 getAccountSecurityProfileUseCase.execute(user, deviceHash)));
     }
 
+    /**
+     * Validates and updates the authenticated user's profile, passing device context to the use case.
+     *
+     * @param deviceHash optional device binding context used by device-scoped rules
+     * @param request requested account-security changes
+     * @return updated profile response envelope
+     */
     @PutMapping("/profile")
     public ResponseEntity<ApiResponse<AccountSecurityProfileDTO>> updateProfile(
             @RequestHeader(value = "X-Device-Hash", required = false) String deviceHash,
@@ -54,6 +75,7 @@ public class AccountSecurityController {
                 updateAccountSecurityProfileUseCase.execute(user, request, deviceHash)));
     }
 
+    /** Resolves the current security principal to an account row or rejects invalid authentication context. */
     private UserDataBase getAuthenticatedUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {

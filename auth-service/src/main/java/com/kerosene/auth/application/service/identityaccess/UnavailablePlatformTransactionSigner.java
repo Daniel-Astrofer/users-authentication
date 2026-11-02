@@ -1,15 +1,13 @@
 package com.kerosene.auth.application.service.identityaccess;
 
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import com.kerosene.auth.model.entity.UserDataBase;
 
-/** Non-production signer that advertises unavailability and rejects signing attempts. */
+/** Fail-closed binding for the retired platform co-signer; Vault Mesh signs custody operations. */
 @Component
-@Profile("!prod")
 public class UnavailablePlatformTransactionSigner implements PlatformTransactionSignerPort {
 
-    /** Always reports unavailable so advanced outbound authorization fails closed outside production. */
+    /** Always reports unavailable so advanced outbound authorization fails closed in every profile. */
     @Override
     public boolean isAvailable() {
         return false;

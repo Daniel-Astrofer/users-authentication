@@ -6,6 +6,11 @@ import java.util.Arrays;
 
 /** Input contract for administrator authentication, including secret proof and device context. */
 public class AdminLoginRequestDTO {
+
+    /** Creates an empty login request bean for JSON deserialization. */
+    public AdminLoginRequestDTO() {
+    }
+
     /** Administrator account name used to locate the credential record. */
     private String username;
 

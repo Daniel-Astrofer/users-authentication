@@ -19,6 +19,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 })
 public class Application {
 
+    /** Creates the Spring Boot configuration root. */
+    public Application() {
+    }
+
     /**
      * Starts the authentication service and its configured Spring application context.
      *

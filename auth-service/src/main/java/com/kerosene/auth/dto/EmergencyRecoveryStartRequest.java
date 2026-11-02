@@ -8,6 +8,10 @@ import java.util.List;
 /** Request that starts emergency recovery with identity, replacement password, recovery codes, and challenge proof. */
 public class EmergencyRecoveryStartRequest {
 
+    /** Creates an empty request for Jackson to populate from the recovery-start JSON body. */
+    public EmergencyRecoveryStartRequest() {
+    }
+
     /** Account name used to locate the recovery-eligible user. */
     private String username;
 

@@ -24,6 +24,10 @@ public class EmergencyRecoveryState implements Serializable {
     /** Hashes of distinct backup codes already matched, used to prevent duplicate code reuse. */
     private List<String> matchedBackupCodeHashes = new ArrayList<>();
 
+    /** Creates an empty session snapshot for the configured serializer. */
+    public EmergencyRecoveryState() {
+    }
+
     /**
      * Returns opaque identifier used as the lookup key for this recovery attempt..
      * @return sessionId value

@@ -4,6 +4,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 /** Write-only administrator-key enrollment data scoped to a device installation. */
 public class AdminKeyCreateRequestDTO {
+
+    /** Creates an empty request bean for JSON deserialization. */
+    public AdminKeyCreateRequestDTO() {
+    }
+
     /** write-only administrator key material hash used to enroll the client key proof */
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String keyMaterialHash;

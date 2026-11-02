@@ -27,6 +27,18 @@ public class JpaAuthUserGateway implements AuthUserGateway {
         return repository.findByUsername(username);
     }
 
+    /** Requires the caller transaction to retain the recovery account lock. */
+    @Override
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public UserDataBase findByUsernameForUpdate(String username) {
+        return repository.findByUsernameForUpdate(username);
+    }
+
+    @Override
+    public java.util.Optional<Long> findCredentialEpochById(Long userId) {
+        return repository.findCredentialEpochById(userId);
+    }
+
     /** Checks whether the username is already stored. */
     @Override
     public boolean existsByUsername(String username) {

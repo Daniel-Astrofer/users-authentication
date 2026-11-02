@@ -32,7 +32,7 @@ public class KfeRemoteFinancialRailHealthClient extends KfeRemoteClientSupport i
      */
     public KfeRemoteFinancialRailHealthClient(
             InternalServiceRestTemplateFactory restTemplateFactory,
-            @Value("${kfe.remote.base-url:http://kfe-service:8080}") String baseUrl,
+            @Value("${kfe.remote.health-base-url:${kfe.remote.base-url:http://kfe-service:8080}}") String baseUrl,
             @Value("${kfe.remote.connect-timeout-ms:2000}") long connectTimeoutMs,
             @Value("${kfe.remote.read-timeout-ms:5000}") long readTimeoutMs) {
         super(restTemplateFactory, baseUrl, connectTimeoutMs, readTimeoutMs);
@@ -51,6 +51,12 @@ public class KfeRemoteFinancialRailHealthClient extends KfeRemoteClientSupport i
                 internalEntity(),
                 ProviderHealth.class);
         return response.getBody();
+    }
+
+    @Override
+    public MeshHealth vaultMeshHealth() {
+        return restTemplate.exchange(baseUrl + "/internal/kfe/rail-health/vault-mesh",
+                HttpMethod.GET, internalEntity(), MeshHealth.class).getBody();
     }
 
     /**

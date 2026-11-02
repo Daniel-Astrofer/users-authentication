@@ -11,9 +11,9 @@ import java.util.Map;
  */
 public interface PushNotificationPort {
 
-    /**
-     * Best-effort fan-out to registered device tokens for the user.
-     * Must never throw into the notification persistence path.
+    /** Best-effort fan-out to the user's registered device tokens; implementations must not break notification persistence.
+     * @param userId owner of the target device tokens
+     * @param payload notification fields to deliver
      */
     void dispatch(Long userId, Map<String, Object> payload);
 }

@@ -34,7 +34,6 @@ public class KfeInternalStompRelayController {
 
     /**
      * Authenticates KFE, validates the publish envelope, and relays the payload to a user queue.
-     * @param credential caller-supplied shared secret
      * @param request target account, destination, and payload
      * @return accepted recipient and normalized destination
      */

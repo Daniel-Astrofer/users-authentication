@@ -10,9 +10,20 @@ import com.kerosene.auth.model.entity.AdminAccessDeviceEntity;
 /** Persistence queries for administrator device enrollment and last-access ordering. */
 @Repository
 public interface AdminAccessDeviceRepository extends JpaRepository<AdminAccessDeviceEntity, UUID> {
-    /** Finds a specific enrolled device owned by a user. */
+    /**
+     * Finds an enrolled device scoped to its owning account.
+     *
+     * @param userId account identifier
+     * @param deviceId stable enrolled-device identifier
+     * @return matching device, or empty when not enrolled for that user
+     */
     Optional<AdminAccessDeviceEntity> findByUserIdAndDeviceId(Long userId, String deviceId);
 
-    /** Lists one user's devices from most recently accessed to least recently accessed. */
+    /**
+     * Lists one account's registered devices ordered by descending last-access time.
+     *
+     * @param userId account identifier
+     * @return devices for that account, newest access first; devices with null timestamps follow database ordering
+     */
     List<AdminAccessDeviceEntity> findByUserIdOrderByLastAccessAtDesc(Long userId);
 }

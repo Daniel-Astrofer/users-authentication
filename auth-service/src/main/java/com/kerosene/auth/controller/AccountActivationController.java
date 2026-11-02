@@ -15,10 +15,11 @@ import com.kerosene.common.dto.ApiResponse;
 import java.util.Map;
 
 /**
- * Controller de ativação de conta e funding inicial de novos usuários.
+ * Controller de status de ativação e do limite de recebimento de fundos de novos usuários.
  *
  * <p>Gerencia a verificação de status de ativação, geração de links de depósito
- * e confirmação manual/reativa de depósitos para liberação de uso da plataforma.</p>
+ * A criação de link e a confirmação externa descritas em clientes antigos estão desativadas nesta
+ * implementação: o funding inicial deve ocorrer pelo fluxo interno da plataforma.</p>
  */
 @RestController
 @RequestMapping("/auth/activation-status")
@@ -26,6 +27,11 @@ public class AccountActivationController {
 
     private final AccountActivationOperationsUseCase accountActivationOperationsUseCase;
 
+    /**
+     * Creates the activation HTTP boundary.
+     *
+     * @param accountActivationOperationsUseCase application operations for the current user's status
+     */
     public AccountActivationController(AccountActivationOperationsUseCase accountActivationOperationsUseCase) {
         this.accountActivationOperationsUseCase = accountActivationOperationsUseCase;
     }
@@ -51,18 +57,18 @@ public class AccountActivationController {
     }
 
     /**
-     * Cria ou reutiliza um link de funding (on-chain ou Lightning) para ativação da conta.
+     * Returns the current activation projection. The current use case does not create a funding link.
      *
      * <p><b>Endpoint:</b> {@code POST /auth/activation-status/funding-link}<br>
      * <b>Autenticação:</b> Obrigatória (JWT de usuário)<br>
      * <b>Respostas:</b></p>
      * <ul>
-     *   <li>{@code 200 OK} - Link preparado contendo endereço/invoice e valor mínimo em satoshis.</li>
+     *   <li>{@code 200 OK} - Current activation projection; funding-link fields remain unset.</li>
      *   <li>{@code 401 UNAUTHORIZED} - Usuário não autenticado.</li>
      * </ul>
      *
      * @param authentication credenciais do usuário autenticado
-     * @return envelope com status de ativação e dados do link gerado
+     * @return envelope with current activation status and no generated external link
      */
     @PostMapping("/funding-link")
     public ResponseEntity<ApiResponse<AccountActivationStatusDTO>> createFundingLink(Authentication authentication) {
@@ -74,21 +80,20 @@ public class AccountActivationController {
     }
 
     /**
-     * Confirma um depósito recebido para o link de ativação informado.
+     * Rejects the legacy external-link confirmation flow. Initial funding is handled inside the platform.
      *
      * <p><b>Endpoint:</b> {@code POST /auth/activation-status/{linkId}/confirm}<br>
      * <b>Autenticação:</b> Obrigatória (JWT de usuário)<br>
      * <b>Respostas:</b></p>
      * <ul>
-     *   <li>{@code 200 OK} - Depósito confirmado e status atualizado.</li>
-     *   <li>{@code 400 BAD REQUEST} - Identificador de link inválido ou divergência de dados.</li>
+     *   <li>{@code 400 BAD REQUEST} - External-link activation is disabled.</li>
      *   <li>{@code 401 UNAUTHORIZED} - Usuário não autenticado.</li>
      * </ul>
      *
      * @param linkId identificador do link de funding gerado previamente
      * @param request corpo contendo os campos {@code txid} e opcionalmente {@code fromAddress}
      * @param authentication credenciais do usuário autenticado
-     * @return envelope com status de ativação atualizado
+     * @return never returns normally; the application use case raises a validation error
      */
     @PostMapping("/{linkId}/confirm")
     public ResponseEntity<ApiResponse<AccountActivationStatusDTO>> confirm(
@@ -103,6 +108,13 @@ public class AccountActivationController {
         return ResponseEntity.ok(ApiResponse.success("Activation status retrieved successfully.", status));
     }
 
+    /**
+     * Converts the Spring Security principal name to the persisted user identifier.
+     * Authentication is required by the surrounding security configuration.
+     *
+     * @param authentication principal supplied by Spring Security
+     * @return numeric identifier used by account activation operations
+     */
     private Long authenticatedUserId(Authentication authentication) {
         return Long.parseLong(authentication.getName());
     }

@@ -80,7 +80,11 @@ public class AdminOperationsController {
         return payload;
     }
 
-    /** Returns the detailed dependency health snapshot. */
+    /**
+     * Returns the detailed health snapshot for configured runtime dependencies.
+     *
+     * @return dependency status, observed details, and health evaluation timestamps
+     */
     @GetMapping("/health")
     public OperationalHealthSnapshot health() {
         return operationalHealthService.dependencies();
@@ -114,19 +118,31 @@ public class AdminOperationsController {
         return port.lightning();
     }
 
-    /** Returns the current cached Vault mesh health projection. */
+    /**
+     * Returns the current cached Vault mesh health projection.
+     *
+     * @return mesh status map from the Vault health service
+     */
     @GetMapping("/vault-mesh")
     public Map<String, Object> vaultMesh() {
         return vaultMeshHealthService.snapshot().asMap();
     }
 
-    /** Returns current release manifest metadata. */
+    /**
+     * Returns the latest application release manifest metadata.
+     *
+     * @return immutable release snapshot
+     */
     @GetMapping("/release")
     public ReleaseManifestService.ReleaseSnapshot release() {
         return releaseManifestService.snapshot();
     }
 
-    /** Returns current mobile application release and download information. */
+    /**
+     * Returns current mobile application release and download information.
+     *
+     * @return configured version and distribution metadata
+     */
     @GetMapping("/mobile")
     public MobileDownloadService.MobileReleaseInfo mobile() {
         return mobileDownloadService.releaseInfo();

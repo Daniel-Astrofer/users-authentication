@@ -45,6 +45,11 @@ import com.kerosene.notification.model.NotificationKind;
 import com.kerosene.notification.model.NotificationSeverity;
 import com.kerosene.notification.service.NotificationService;
 
+/**
+ * Coordinates administrator login approval, key enrollment, device trust, and audit recording.
+ * Login attempts are transactionally persisted and bound to a client-context fingerprint until
+ * an active mobile device approves them or the configured five-minute attempt expires.
+ */
 @Service
 public class AdminAccessService {
 
@@ -61,6 +66,18 @@ public class AdminAccessService {
     private final AdminAccessEventRepository eventRepository;
     private final NotificationService notificationService;
 
+    /**
+     * Wires the identity, persistence, token, audit, and notification boundaries used by admin access.
+     *
+     * @param loginVerifier verifies submitted account credentials
+     * @param jwtServicer issues the administrator token after successful mobile approval
+     * @param userRepository resolves the account and role
+     * @param adminKeyRepository persists administrator key hashes and lifecycle state
+     * @param deviceRepository persists device enrollment and trust status
+     * @param attemptRepository persists and locks pending access attempts
+     * @param eventRepository records security-relevant access outcomes
+     * @param notificationService notifies the mobile account about a pending attempt
+     */
     public AdminAccessService(
             LoginVerifier loginVerifier,
             JwtServicer jwtServicer,
@@ -80,6 +97,17 @@ public class AdminAccessService {
         this.notificationService = notificationService;
     }
 
+    /**
+     * Verifies credentials and the configured admin-key proof, then creates a pending mobile approval.
+     * The attempt stores a fingerprint of the address and the sanitized user-agent context for poll binding;
+     * a blocked or revoked device is rejected before an attempt is created.
+     *
+     * @param request credentials, admin-key proof, and device metadata submitted by the client
+     * @param remoteAddress network address supplied by the trusted HTTP boundary
+     * @param userAgentHeader request user-agent used when client metadata omits it
+     * @return pending challenge identifier and expiry; no session token is issued yet
+     * @throws AuthExceptions.StructuredAuthException for non-admin roles, missing/invalid keys, or blocked devices
+     */
     @Transactional
     public AdminLoginResponseDTO startLogin(
             AdminLoginRequestDTO request,
@@ -158,6 +186,17 @@ public class AdminAccessService {
                 "Aguardando autorizacao no app mobile.");
     }
 
+    /**
+     * Reads a pending attempt under a write lock and redeems an approval exactly once.
+     * On approval it activates the device, marks the attempt redeemed, and issues an admin JWT;
+     * expired or still-pending attempts never receive a token.
+     *
+     * @param attemptId challenge identifier returned by {@link #startLogin(AdminLoginRequestDTO, String, String)}
+     * @param remoteAddress polling client's network address, fingerprinted and compared to the challenge
+     * @param userAgentHeader polling client's user-agent, compared to the challenge context
+     * @return current challenge state and a token only when mobile approval was redeemed
+     * @throws AuthExceptions.StructuredAuthException when the attempt is absent or client context differs
+     */
     @Transactional
     public AdminLoginResponseDTO pollLogin(UUID attemptId, String remoteAddress, String userAgentHeader) {
         AdminAccessAttemptEntity attempt = attemptRepository.findForPollingById(attemptId)
@@ -183,7 +222,7 @@ public class AdminAccessService {
             attemptRepository.save(attempt);
             deviceRepository.save(attempt.getDevice());
             String token = attempt.getUser().getId() + " "
-                    + jwtServicer.generateToken(attempt.getUser().getId(), List.of(UserRole.ADMIN.name()));
+                    + jwtServicer.generateTokenAtCredentialEpoch(attempt.getUser().getId(), List.of(UserRole.ADMIN.name()), attempt.getUser().getCredentialEpoch());
             return new AdminLoginResponseDTO(
                     "APPROVED",
                     false,
@@ -202,6 +241,14 @@ public class AdminAccessService {
                 statusMessage(attempt.getStatus()));
     }
 
+    /**
+     * Recomputes poll context signals and rejects a request that differs from the challenge context.
+     *
+     * @param attempt persisted challenge containing the expected fingerprints
+     * @param remoteAddress current request address
+     * @param userAgentHeader current request user-agent
+     * @throws AuthExceptions.StructuredAuthException when either fingerprint differs
+     */
     private void validatePollingContext(
             AdminAccessAttemptEntity attempt,
             String remoteAddress,
@@ -221,6 +268,12 @@ public class AdminAccessService {
         }
     }
 
+    /**
+     * Lists non-expired pending attempts for one administrator, newest first.
+     *
+     * @param userId authenticated administrator account identifier
+     * @return pending challenge summaries eligible for a decision
+     */
     @Transactional(readOnly = true)
     public List<AdminAccessAttemptDTO> pendingAttempts(Long userId) {
         return attemptRepository
@@ -233,6 +286,17 @@ public class AdminAccessService {
                 .toList();
     }
 
+    /**
+     * Records an administrator's decision for an account-scoped pending attempt.
+     * Only {@code APPROVE} and {@code ALLOW} are approvals; other values block the request and device.
+     * Expired attempts are marked expired and returned without applying the supplied decision.
+     *
+     * @param userId authenticated administrator account identifier
+     * @param attemptId pending attempt identifier
+     * @param decision requested approval or denial code
+     * @return updated attempt status
+     * @throws AuthExceptions.StructuredAuthException when the attempt is absent or belongs to another account
+     */
     @Transactional
     public AdminAccessAttemptDTO decide(Long userId, UUID attemptId, String decision) {
         AdminAccessAttemptEntity attempt = attemptRepository.findByIdAndUserId(attemptId, userId)
@@ -270,6 +334,17 @@ public class AdminAccessService {
         return toAttemptDTO(attemptRepository.save(attempt));
     }
 
+    /**
+     * Replaces active administrator key records with a normalized verifier for the new enrollment.
+     * Existing active keys are revoked in the same transaction; only the verifier and its fingerprint
+     * are persisted, never a raw signing secret.
+     *
+     * @param userId account receiving the key enrollment
+     * @param request write-only key verifier and optional device-install binding
+     * @return non-secret status and fingerprint of the newly active key
+     * @throws AuthExceptions.InvalidCredentials when the account does not exist
+     * @throws AuthExceptions.StructuredAuthException when the normalized verifier length is outside 32..128
+     */
     @Transactional
     public AdminKeyStatusDTO createOrRotateKey(Long userId, AdminKeyCreateRequestDTO request) {
         UserDataBase user = requireUser(userId);
@@ -304,6 +379,12 @@ public class AdminAccessService {
         return toKeyStatus(key);
     }
 
+    /**
+     * Returns active key metadata without revealing the stored verifier.
+     *
+     * @param userId account whose active key is queried
+     * @return active key summary or an explicit MISSING status
+     */
     @Transactional(readOnly = true)
     public AdminKeyStatusDTO keyStatus(Long userId) {
         return adminKeyRepository.findFirstByUserIdAndStatusOrderByCreatedAtDesc(userId, AdminKeyStatus.ACTIVE)
@@ -311,6 +392,12 @@ public class AdminAccessService {
                 .orElse(new AdminKeyStatusDTO(false, "MISSING", null, null, null));
     }
 
+    /**
+     * Revokes all active key records for the account and records their revocation time.
+     *
+     * @param userId account whose keys are revoked
+     * @return non-secret revoked status and the operation timestamp
+     */
     @Transactional
     public AdminKeyStatusDTO revokeKey(Long userId) {
         LocalDateTime now = LocalDateTime.now();
@@ -325,6 +412,12 @@ public class AdminAccessService {
         return new AdminKeyStatusDTO(false, "REVOKED", null, null, now);
     }
 
+    /**
+     * Lists the administrator's enrolled devices, newest last-access first with unset times last.
+     *
+     * @param userId account whose devices are listed
+     * @return device summaries including current trust status
+     */
     @Transactional(readOnly = true)
     public List<AdminAuthenticatedDeviceDTO> devices(Long userId) {
         return deviceRepository.findByUserIdOrderByLastAccessAtDesc(userId)
@@ -335,6 +428,15 @@ public class AdminAccessService {
                 .toList();
     }
 
+    /**
+     * Changes one account-scoped device's trust state and refreshes its last-access timestamp.
+     *
+     * @param userId owning administrator account
+     * @param deviceId stable device enrollment identifier
+     * @param status target trust state
+     * @return persisted device summary after the change
+     * @throws AuthExceptions.StructuredAuthException when the device is not enrolled for this account
+     */
     @Transactional
     public AdminAuthenticatedDeviceDTO changeDeviceStatus(Long userId, String deviceId, AdminAccessDeviceStatus status) {
         AdminAccessDeviceEntity device = deviceRepository.findByUserIdAndDeviceId(userId, deviceId)
@@ -348,6 +450,12 @@ public class AdminAccessService {
         return toDeviceDTO(deviceRepository.save(device));
     }
 
+    /**
+     * Adapts admin credentials to the shared login verifier and clears password buffers afterwards.
+     *
+     * @param request login credentials; its password field is wiped before this method exits
+     * @return authenticated persisted account
+     */
     private UserDataBase authenticateCredentials(AdminLoginRequestDTO request) {
         UserDTO dto = new UserDTO();
         dto.setUsername(request.getUsername());
@@ -360,6 +468,17 @@ public class AdminAccessService {
         }
     }
 
+    /**
+     * Loads or creates an account-scoped device enrollment and refreshes its descriptive metadata.
+     * Existing blocked or revoked states are preserved for the caller to reject.
+     *
+     * @param user account that owns the device
+     * @param deviceId stable identifier derived from the request
+     * @param deviceName optional label supplied by the client
+     * @param browser bounded browser label
+     * @param userAgent bounded user-agent description
+     * @return persisted device enrollment with updated last-access time
+     */
     private AdminAccessDeviceEntity upsertDevice(
             UserDataBase user,
             String deviceId,
@@ -380,6 +499,13 @@ public class AdminAccessService {
         return deviceRepository.save(device);
     }
 
+    /**
+     * Sends a warning notification containing the pending challenge metadata to the user's mobile account.
+     * Delivery failures are logged and do not roll back the already-persisted login attempt.
+     *
+     * @param user account to notify
+     * @param attempt persisted challenge referenced by the notification
+     */
     private void notifyMobile(UserDataBase user, AdminAccessAttemptEntity attempt) {
         try {
             notificationService.notifyUser(
@@ -402,6 +528,17 @@ public class AdminAccessService {
         }
     }
 
+    /**
+     * Persists a sanitized audit event for an administrator access outcome.
+     *
+     * @param adminId account involved in the event
+     * @param deviceId enrolled or attempted device identifier
+     * @param browser browser metadata captured for the event
+     * @param userAgent sanitized user-agent description
+     * @param ipFingerprint one-way client address fingerprint
+     * @param status access outcome
+     * @param reason bounded internal reason code
+     */
     private void recordEvent(
             Long adminId,
             String deviceId,
@@ -421,6 +558,7 @@ public class AdminAccessService {
         eventRepository.save(event);
     }
 
+    /** Projects the persistence entity and its linked device into the API attempt response. */
     private AdminAccessAttemptDTO toAttemptDTO(AdminAccessAttemptEntity attempt) {
         AdminAccessDeviceEntity device = attempt.getDevice();
         return new AdminAccessAttemptDTO(
@@ -435,6 +573,7 @@ public class AdminAccessService {
                 attempt.getExpiresAt());
     }
 
+    /** Projects device enrollment metadata without exposing persistence identifiers or key material. */
     private AdminAuthenticatedDeviceDTO toDeviceDTO(AdminAccessDeviceEntity device) {
         return new AdminAuthenticatedDeviceDTO(
                 device.getDeviceId(),
@@ -446,6 +585,7 @@ public class AdminAccessService {
                 device.getLastAccessAt());
     }
 
+    /** Projects key lifecycle metadata and the non-secret display fingerprint into an API response. */
     private AdminKeyStatusDTO toKeyStatus(AdminKeyEntity key) {
         return new AdminKeyStatusDTO(
                 key.getStatus() == AdminKeyStatus.ACTIVE,
@@ -455,6 +595,13 @@ public class AdminAccessService {
                 key.getRevokedAt());
     }
 
+    /**
+     * Loads an account required for key enrollment or raises a structured not-found error.
+     *
+     * @param userId persisted account identifier
+     * @return account entity
+     * @throws AuthExceptions.StructuredAuthException when no row exists
+     */
     private UserDataBase requireUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new AuthExceptions.StructuredAuthException(
@@ -464,12 +611,22 @@ public class AdminAccessService {
                         null));
     }
 
+    /** Compares normalized verifier strings through the JDK constant-time byte-array primitive. */
     private boolean constantTimeEquals(String left, String right) {
         return MessageDigest.isEqual(
                 normalizeHash(left).getBytes(StandardCharsets.UTF_8),
                 normalizeHash(right).getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * Uses a bounded client device identifier when supplied, otherwise derives a stable fingerprint
+     * from browser, user-agent, platform, and network address signals.
+     *
+     * @param request login request containing optional device metadata
+     * @param remoteAddress observed client address used only as a fingerprint input
+     * @param userAgentHeader HTTP user-agent fallback
+     * @return sanitized identifier suitable for the device enrollment key
+     */
     private String stableDeviceId(AdminLoginRequestDTO request, String remoteAddress, String userAgentHeader) {
         String declared = request.getDeviceId();
         if (hasText(declared) && declared.length() <= 128) {
@@ -482,6 +639,7 @@ public class AdminAccessService {
         return LogSanitizer.fingerprint(fingerprintBase);
     }
 
+    /** Maps a persisted attempt state to the user-facing polling response message. */
     private String statusMessage(AdminAccessAttemptStatus status) {
         return switch (status) {
             case PENDING -> "Aguardando autorizacao no app mobile.";
@@ -492,10 +650,12 @@ public class AdminAccessService {
         };
     }
 
+    /** Trims and lowercases a submitted key verifier; null becomes an empty value for validation. */
     private String normalizeHash(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
+    /** Returns the first non-null, non-blank candidate, or the empty string. */
     private String firstText(String... values) {
         for (String value : values) {
             if (hasText(value)) {
@@ -505,15 +665,18 @@ public class AdminAccessService {
         return "";
     }
 
+    /** Checks whether a string contains any non-whitespace character. */
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
 
+    /** Sanitizes an identifier and fingerprints it when it exceeds the storage bound. */
     private String safeId(String value) {
         String sanitized = safe(value);
         return sanitized.length() > 128 ? LogSanitizer.fingerprint(sanitized) : sanitized;
     }
 
+    /** Replaces control whitespace, trims a value, and truncates it to the audit text limit. */
     private String safe(String value) {
         if (value == null) {
             return "";

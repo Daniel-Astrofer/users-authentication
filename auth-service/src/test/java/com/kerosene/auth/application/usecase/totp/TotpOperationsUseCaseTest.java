@@ -1,6 +1,14 @@
 package com.kerosene.auth.application.usecase.totp;
 
 import org.junit.jupiter.api.Test;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.identityaccess.TransactionalAuthenticationPort;
+import com.kerosene.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
+import com.kerosene.auth.application.service.identityaccess.TransactionalAuthenticationScope;
+import org.mockito.ArgumentCaptor;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.*;
 import com.kerosene.auth.application.service.account.TotpManagementService;
 import com.kerosene.auth.dto.BackupCodesStatusDTO;
 import com.kerosene.auth.dto.TotpSetupResponseDTO;
@@ -15,7 +23,8 @@ import static org.mockito.Mockito.when;
 class TotpOperationsUseCaseTest {
 
     private final TotpManagementService totpManagementService = mock(TotpManagementService.class);
-    private final TotpOperationsUseCase useCase = new TotpOperationsUseCase(totpManagementService);
+    private final TransactionalAuthenticationPort authorization = mock(TransactionalAuthenticationPort.class);
+    private final TotpOperationsUseCase useCase = new TotpOperationsUseCase(totpManagementService, authorization);
 
     @Test
     void setupDelegatesToTotpManagementService() {
@@ -43,6 +52,28 @@ class TotpOperationsUseCaseTest {
     void disableDelegatesToTotpManagementService() {
         useCase.disable(42L);
 
-        verify(totpManagementService).disable(42L);
+        var order = inOrder(authorization, totpManagementService);
+        order.verify(authorization).authorize(any());
+        order.verify(totpManagementService).disable(42L);
+    }
+    @Test
+    void rejectedAuthorizationCannotDisableTotp() {
+        doThrow(new AuthExceptions.InvalidCredentials("Rejected"))
+                .when(authorization).authorize(any());
+        assertThrows(AuthExceptions.InvalidCredentials.class,
+                () -> useCase.disable(42L, "123456", "proof", " phrase "));
+        verifyNoInteractions(totpManagementService);
+    }
+
+    @Test
+    void disableBindsOwnerScopeAndPreservesFactors() {
+        useCase.disable(42L, "123456", "proof", " phrase ");
+        var request = ArgumentCaptor.forClass(TransactionalAuthenticationRequest.class);
+        verify(authorization).authorize(request.capture());
+        assertEquals(42L, request.getValue().authenticatedUserId());
+        assertEquals(TransactionalAuthenticationScope.ACCOUNT_SECURITY_CHANGE, request.getValue().scope());
+        assertEquals("123456", request.getValue().totpCode());
+        assertEquals("proof", request.getValue().passkeyAssertionJson());
+        assertEquals(" phrase ", request.getValue().confirmationPassphrase());
     }
 }

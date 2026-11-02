@@ -26,14 +26,18 @@ public class EconomyController {
     /** Supplies current BTC market data for public quote responses. */
     private final TickerService tickerService;
 
-    /** Creates economy endpoints with live operational and market-data providers. */
-    /** @param redisTemplate reads current economy status values @param tickerService market quote provider */
+    /** Creates economy endpoints with live operational and market-data providers.
+     * @param redisTemplate reads current economy status values from Redis
+     * @param tickerService supplies market prices and 24-hour changes
+     */
     public EconomyController(StringRedisTemplate redisTemplate, TickerService tickerService) {
         this.redisTemplate = redisTemplate;
         this.tickerService = tickerService;
     }
 
-    /** Returns current withdrawal fee and availability values, using product defaults when absent. */
+    /** Returns current withdrawal fee and availability values, using product defaults when absent.
+     * @return successful API envelope containing fee in satoshis and withdrawal status
+     */
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getEconomyStatus() {
         String fee = redisTemplate.opsForValue().get("economy:current_withdrawal_fee");
@@ -48,7 +52,9 @@ public class EconomyController {
                 data));
     }
 
-    /** Returns the current BTC quote currencies and metadata from the configured ticker service. */
+    /** Returns the current BTC quote currencies and metadata from the configured ticker service.
+     * @return successful API envelope with prices, derived USD/BRL rate, and update timestamp
+     */
     @GetMapping("/btc-price")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getBtcPrice() {
         Map<String, Object> data = BtcPriceQuoteBuilder.build(tickerService);

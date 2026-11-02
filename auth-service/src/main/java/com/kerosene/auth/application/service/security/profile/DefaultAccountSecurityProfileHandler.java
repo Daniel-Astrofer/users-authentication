@@ -10,8 +10,15 @@ import com.kerosene.auth.model.enums.AccountSecurityType;
 @Order(30)
 public class DefaultAccountSecurityProfileHandler extends AbstractAccountSecurityProfileHandler {
 
-    /** Applies safe defaults while preserving the threshold fields owned by advanced modes. */
-    /** @param context current account profile */
+    /** Creates the terminal standard-mode profile handler. */
+    public DefaultAccountSecurityProfileHandler() {
+    }
+
+    /**
+     * Applies standard-mode defaults while preserving threshold values owned by advanced modes.
+     *
+     * @param context current account profile
+     */
     @Override
     public void handle(AccountSecurityProfileContext context) {
         if (context.getSecurityType() == AccountSecurityType.SHAMIR

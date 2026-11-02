@@ -16,9 +16,11 @@ public class GetDeviceKeyAuthenticationChallengeUseCase {
     /** Device-key service that generates a challenge for the account's registered keys. */
     private final DeviceKeyService deviceKeyService;
 
-    /** Creates the authentication challenge use case. */
-    /** @param userRepository user lookup repository */
-    /** @param deviceKeyService device-key challenge generator */
+    /**
+     * Creates the authentication challenge use case.
+     * @param userRepository user lookup repository
+     * @param deviceKeyService device-key challenge generator
+     */
     public GetDeviceKeyAuthenticationChallengeUseCase(
             UserRepository userRepository,
             DeviceKeyService deviceKeyService) {
@@ -26,9 +28,11 @@ public class GetDeviceKeyAuthenticationChallengeUseCase {
         this.deviceKeyService = deviceKeyService;
     }
 
-    /** Normalizes the username, returns a not-found result or delegates challenge generation. */
-    /** @param username account username submitted for device-key authentication */
-    /** @return generated challenge or not-found result */
+    /**
+     * Normalizes the username, returns a not-found result or delegates challenge generation.
+     * @param username account username submitted for device-key authentication
+     * @return generated challenge or not-found result
+     */
     @Transactional(readOnly = true)
     public Result execute(String username) {
         UserDataBase user = userRepository.findByUsername(DeviceKeyUsernameSupport.normalizeUsername(username));
@@ -47,15 +51,19 @@ public class GetDeviceKeyAuthenticationChallengeUseCase {
      */
     public record Result(Status status, String message, DeviceKeyChallengeResponse challenge) {
 
-        /** Builds the account-not-found response. */
-        /** @return result with a public not-found message */
+        /**
+         * Builds the account-not-found response.
+         * @return result with a public not-found message
+         */
         public static Result userNotFound() {
             return new Result(Status.USER_NOT_FOUND, "User not found", null);
         }
 
-        /** Builds the successful challenge response. */
-        /** @param challenge generated device-key challenge */
-        /** @return result containing the challenge */
+        /**
+         * Builds the successful challenge response.
+         * @param challenge generated device-key challenge
+         * @return result containing the challenge
+         */
         public static Result generated(DeviceKeyChallengeResponse challenge) {
             return new Result(Status.GENERATED, null, challenge);
         }

@@ -48,8 +48,10 @@ public class IssueSessionToken {
      * @return user ID, one space, and the signed JWT
      */
     public String issue(UserDataBase user) {
+        String token = jwtService.generateTokenAtCredentialEpoch(user.getId(), List.of(user.getRole().name()), user.getCredentialEpoch());
+        if (token == null || token.isBlank()) throw new IllegalStateException("Authenticated session token was not issued.");
         notifyLogin(user.getId());
-        return user.getId() + " " + jwtService.generateToken(user.getId(), List.of(user.getRole().name()));
+        return user.getId() + " " + token;
     }
 
     /** Sends a warning notification for the login without failing token issuance on delivery errors. */

@@ -68,6 +68,15 @@ public class RecoveryRateLimitService {
         }
     }
 
+    /** Bounds new authenticator guesses and challenge issuance within one already-proven recovery session. */
+    public void enforceDeviceKeyChallengeAttempt(String recoverySessionId) {
+        Long attempts = redisContract.incrementWithExpire("auth:recovery:device-key:" + recoverySessionId,
+                clientWindowSeconds);
+        if (attempts == null || attempts < 1 || attempts > clientMaxAttempts) {
+            throw new AuthExceptions.RecoveryRateLimitedException("Recovery enrollment challenge limit exceeded.");
+        }
+    }
+
     /** Counts failed recovery proofs by username and blocks both username and client at the threshold. */
     /** @param normalizedUsername canonical account username */
     /** @param clientFingerprint client/device fingerprint to block with the account */

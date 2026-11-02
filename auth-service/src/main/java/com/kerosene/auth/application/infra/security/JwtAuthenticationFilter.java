@@ -39,6 +39,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.resolver = resolver;
     }
 
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        String bank = com.kerosene.platform.security.EndpointPolicyRegistry.BANK_RELEASE_OBSERVATION;
+        return path.equals(bank) || path.startsWith(bank + "/");
+    }
+
     private boolean isSkipBlockPath(String path) {
         return SKIP_BLOCK_PATHS.stream().anyMatch(p -> PATH_MATCHER.match(p, path));
     }
@@ -74,10 +81,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 // Check if the token needs renewal
                 if (jwtServiceImpl.shouldRenewToken(token)) {
-                    String newToken = jwtService.generateToken(
-                            userId,
-                            jwtService.extractRoles(token),
-                            jwtService.extractSessionId(token));
+                    String newToken = jwtServiceImpl.renewToken(token);
                     response.setHeader("X-New-Token", newToken);
                 }
 

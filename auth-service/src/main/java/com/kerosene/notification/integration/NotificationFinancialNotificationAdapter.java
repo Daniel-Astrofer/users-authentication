@@ -1,6 +1,12 @@
 package com.kerosene.notification.integration;
 
 import org.springframework.context.annotation.Primary;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.kerosene.common.financial.notification.FinancialNotificationEventRequest;
+import com.kerosene.common.financial.notification.FinancialNotificationReceipt;
+import com.kerosene.notification.service.FinancialNotificationEventService;
+import com.kerosene.notification.service.FinancialNotificationPayloads;
+import java.time.Instant;
 import org.springframework.stereotype.Component;
 import com.kerosene.common.financial.notification.FinancialNotificationPort;
 import com.kerosene.notification.l10n.NotificationMessageKey;
@@ -21,8 +27,61 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
 
     private final NotificationService notificationService;
 
-    public NotificationFinancialNotificationAdapter(NotificationService notificationService) {
+    private final FinancialNotificationEventService events;
+
+    @Autowired
+    public NotificationFinancialNotificationAdapter(NotificationService notificationService,
+                                                     FinancialNotificationEventService events) {
         this.notificationService = notificationService;
+        this.events = events;
+    }
+
+    public NotificationFinancialNotificationAdapter(NotificationService notificationService) {
+        this(notificationService, null);
+    }
+
+    @Override
+    public FinancialNotificationReceipt deliverEvent(FinancialNotificationEventRequest event) {
+        if (events == null) throw new IllegalStateException("Financial inbox is not configured.");
+        return events.accept(event);
+    }
+
+    private void lifecycle(FinancialNotificationEventRequest.Type type, Long userId, UUID tx,
+                           UUID wallet, String rail, long amount, int confirmations, String reference,
+                           String failureCode) {
+        notificationService.notifyUser(userId, FinancialNotificationPayloads.from(
+                new FinancialNotificationEventRequest(UUID.randomUUID(), 1, type, userId,
+                        tx, wallet, rail, amount, confirmations, reference, failureCode, null, null, Instant.now())));
+    }
+
+    @Override
+    public void notifyPaymentInitiated(Long userId, UUID tx, UUID wallet, String rail, long amount) {
+        lifecycle(FinancialNotificationEventRequest.Type.PAYMENT_PROCESSING, userId, tx, wallet, rail, amount, 0, null, null);
+    }
+
+    @Override
+    public void notifyPaymentBroadcast(Long userId, UUID tx, UUID wallet, String rail, long amount, String reference) {
+        lifecycle(FinancialNotificationEventRequest.Type.PAYMENT_BROADCAST, userId, tx, wallet, rail, amount, 0, reference, null);
+    }
+
+    @Override
+    public void notifyPaymentConfirmed(Long userId, UUID tx, UUID wallet, String rail, long amount, int confirmations) {
+        lifecycle(FinancialNotificationEventRequest.Type.PAYMENT_CONFIRMED, userId, tx, wallet, rail, amount, confirmations, null, null);
+    }
+
+    @Override
+    public void notifyPaymentFailed(Long userId, UUID tx, UUID wallet, String rail, long amount, String code, String ignoredProviderMessage) {
+        lifecycle(FinancialNotificationEventRequest.Type.PAYMENT_FAILED, userId, tx, wallet, rail, amount, 0, null, code);
+    }
+
+    @Override
+    public void notifyPaymentReconciliationRequired(Long userId, UUID tx, UUID wallet, String rail, long amount, String ignoredProviderMessage) {
+        lifecycle(FinancialNotificationEventRequest.Type.PAYMENT_RECONCILIATION_REQUIRED, userId, tx, wallet, rail, amount, 0, null, null);
+    }
+
+    @Override
+    public void notifyOutboundConflicted(Long userId, UUID tx, UUID wallet, String rail, long amount, String reference) {
+        lifecycle(FinancialNotificationEventRequest.Type.PAYMENT_CONFLICTED, userId, tx, wallet, rail, amount, 0, reference, null);
     }
 
     @Override

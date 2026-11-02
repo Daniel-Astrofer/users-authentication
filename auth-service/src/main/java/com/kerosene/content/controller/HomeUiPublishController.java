@@ -46,7 +46,6 @@ public class HomeUiPublishController {
      * @param surfaceComposer composer for user-specific full snapshots
      * @param pushService live event publisher
      * @param objectMapper JSON parser used to validate request payloads
-     * @param internalSecret configured shared internal credential
      */
     public HomeUiPublishController(
             HomeUiOverrideService overrideService,
@@ -62,7 +61,6 @@ public class HomeUiPublishController {
     /**
      * Routes an authenticated publish command to override, snapshot, patch, or greeting handling.
      *
-     * @param credential value of {@code X-KFE-Internal-Secret}; missing credentials are rejected
      * @param request command discriminator and action-specific payload
      * @return success envelope with saved override or pushed event metadata
      * @throws ResponseStatusException with 401/503 for credential configuration failures and 400 for invalid requests

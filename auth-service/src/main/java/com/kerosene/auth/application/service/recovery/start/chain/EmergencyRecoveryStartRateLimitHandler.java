@@ -14,14 +14,18 @@ public class EmergencyRecoveryStartRateLimitHandler extends AbstractEmergencyRec
     /** Redis-backed policy for start and failure counters. */
     private final RecoveryRateLimitService rateLimitService;
 
-    /** Creates the recovery-start throttle handler. */
-    /** @param rateLimitService recovery throttle policy */
+    /**
+     * Creates the recovery-start throttle handler.
+     * @param rateLimitService recovery throttle policy
+     */
     public EmergencyRecoveryStartRateLimitHandler(RecoveryRateLimitService rateLimitService) {
         this.rateLimitService = rateLimitService;
     }
 
-    /** Rejects exhausted clients before PoW or user lookup, then continues. */
-    /** @param context validated request identity and client fingerprint */
+    /**
+     * Rejects exhausted clients before PoW or user lookup, then continues.
+     * @param context validated request identity and client fingerprint
+     */
     @Override
     public void handle(EmergencyRecoveryStartContext context) {
         rateLimitService.enforceStartAttempt(context.normalizedUsername(), context.clientFingerprint());

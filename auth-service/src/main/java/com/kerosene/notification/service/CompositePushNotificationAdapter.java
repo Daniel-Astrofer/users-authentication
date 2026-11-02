@@ -18,11 +18,16 @@ import java.util.Map;
 @Primary
 public class CompositePushNotificationAdapter implements PushNotificationPort {
 
+    /** Logger for optional adapter failures that are isolated from notification persistence. */
     private static final Logger logger = LoggerFactory.getLogger(CompositePushNotificationAdapter.class);
 
     private final LoggingPushNotificationAdapter loggingAdapter;
     private final ObjectProvider<WebhookPushNotificationAdapter> webhookAdapter;
 
+    /** Creates the composite fan-out with a required logger and optional webhook adapter.
+     * @param loggingAdapter local logging implementation
+     * @param webhookAdapter provider for the configured webhook adapter, when present
+     */
     public CompositePushNotificationAdapter(
             LoggingPushNotificationAdapter loggingAdapter,
             ObjectProvider<WebhookPushNotificationAdapter> webhookAdapter) {
@@ -31,6 +36,10 @@ public class CompositePushNotificationAdapter implements PushNotificationPort {
     }
 
     @Override
+    /** Attempts local logging and optional webhook delivery independently.
+     * @param userId notification recipient
+     * @param payload notification fields to dispatch
+     */
     public void dispatch(Long userId, Map<String, Object> payload) {
         try {
             loggingAdapter.dispatch(userId, payload);

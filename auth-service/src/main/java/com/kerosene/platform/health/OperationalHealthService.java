@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import com.kerosene.platform.config.production.ProductionProfileDetector;
 import com.kerosene.platform.config.production.ProductionSafetyCheckChain;
-import com.kerosene.security.vault.VaultMeshHealthService;
 import com.kerosene.common.financial.operations.FinancialRailHealthPort;
 
 import java.net.HttpURLConnection;
@@ -49,11 +48,6 @@ public class OperationalHealthService {
     private static final List<TableRef> REQUIRED_TABLES = List.of(
             new TableRef("auth", "users_credentials"),
             new TableRef("auth", "passkey_credentials"),
-            new TableRef("financial", "wallets_core"),
-            new TableRef("financial", "balances_core"),
-            new TableRef("financial", "transactions_master"),
-            new TableRef("financial", "financial_execution_outbox"),
-            new TableRef("financial", "financial_audit_log"),
             new TableRef("public", "notifications"));
 
     private final JdbcTemplate jdbcTemplate;
@@ -61,7 +55,6 @@ public class OperationalHealthService {
     private final ApplicationAvailability applicationAvailability;
     private final Environment environment;
     private final ObjectProvider<TorHealthIndicator> torHealthIndicator;
-    private final ObjectProvider<VaultMeshHealthService> vaultMeshHealthService;
     private final ObjectProvider<FinancialRailHealthPort> financialRailHealthPort;
     private final ProductionProfileDetector productionProfileDetector;
     private final ProductionSafetyCheckChain productionSafetyCheckChain;
@@ -74,7 +67,6 @@ public class OperationalHealthService {
             ApplicationAvailability applicationAvailability,
             Environment environment,
             ObjectProvider<TorHealthIndicator> torHealthIndicator,
-            ObjectProvider<VaultMeshHealthService> vaultMeshHealthService,
             ObjectProvider<FinancialRailHealthPort> financialRailHealthPort,
             ProductionProfileDetector productionProfileDetector,
             ProductionSafetyCheckChain productionSafetyCheckChain,
@@ -85,7 +77,6 @@ public class OperationalHealthService {
         this.applicationAvailability = applicationAvailability;
         this.environment = environment;
         this.torHealthIndicator = torHealthIndicator;
-        this.vaultMeshHealthService = vaultMeshHealthService;
         this.financialRailHealthPort = financialRailHealthPort;
         this.productionProfileDetector = productionProfileDetector;
         this.productionSafetyCheckChain = productionSafetyCheckChain;
@@ -210,7 +201,7 @@ public class OperationalHealthService {
 
             boolean up = missing == null || missing.isEmpty();
             Map<String, Object> details = new LinkedHashMap<>();
-            details.put("migrationMode", "external_sql_plus_hibernate_validate");
+            details.put("migrationMode", "flyway_plus_hibernate_validate");
             details.put("requiredTablesChecked", REQUIRED_TABLES.size());
             if (!up) {
                 details.put("missingTables", missing);
@@ -277,57 +268,16 @@ public class OperationalHealthService {
     private DependencyHealth checkVaultMesh(boolean critical) {
         long start = System.nanoTime();
         try {
-            VaultMeshHealthService service = vaultMeshHealthService.getIfAvailable();
-            if (service == null) {
-                if (!critical) {
-                    return record(new DependencyHealth(
-                            "vaultMesh",
-                            UNKNOWN,
-                            false,
-                            elapsedMs(start),
-                            "Vault mesh health service is not available",
-                            Map.of("required", false)));
-                }
-                return record(new DependencyHealth(
-                        "vaultMesh",
-                        DOWN,
-                        true,
-                        elapsedMs(start),
-                        "Vault mesh health service is required but not available",
-                        Map.of("required", true)));
-            }
-            var snapshot = service.snapshot();
-            String status = snapshot.status();
-            if (DISABLED.equals(status) && !critical) {
-                status = UP;
-            } else if (DISABLED.equals(status) && critical) {
-                status = DOWN;
-            }
-            Map<String, Object> details = new LinkedHashMap<>();
-            if (snapshot.details() != null) {
-                details.putAll(snapshot.details());
-            }
-            details.put("nodeId", snapshot.nodeId() != null ? snapshot.nodeId() : "");
-            details.put("nodeStatus", snapshot.nodeStatus() != null ? snapshot.nodeStatus() : "");
-            details.put("attestationMode", snapshot.attestationMode() != null ? snapshot.attestationMode() : "");
-            details.put("peerCount", snapshot.peerCount());
-            details.put("dayEpoch", snapshot.dayEpoch() != null ? snapshot.dayEpoch() : "");
-            details.put("dayUpToDate", snapshot.dayUpToDate());
-            details.put("meshOnly", snapshot.meshOnly());
-            return record(new DependencyHealth(
-                    "vaultMesh",
-                    status,
-                    critical,
-                    elapsedMs(start),
-                    snapshot.message(),
-                    details));
+            FinancialRailHealthPort port = financialRailHealthPort.getIfAvailable();
+            var mesh = port != null ? port.vaultMeshHealth() : null;
+            boolean ready = mesh != null && mesh.ready();
+            return record(new DependencyHealth("vaultMesh", ready ? UP : DOWN, critical,
+                    elapsedMs(start), "KFE authenticated Vault Mesh readiness",
+                    Map.of("status", mesh != null ? mesh.status() : "UNAVAILABLE")));
         } catch (Exception exception) {
-            return record(down("vaultMesh", critical, start, "Vault mesh health probe failed", exception));
+            return record(down("vaultMesh", critical, start, "KFE Vault Mesh readiness unavailable", exception));
         }
     }
-
-
-
 
     private DependencyHealth checkTor(boolean critical) {
         long start = System.nanoTime();

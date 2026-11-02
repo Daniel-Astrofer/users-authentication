@@ -2,8 +2,10 @@ package com.kerosene.platform.util;
 
 import java.util.Base64;
 
+/** Base64 decoding helpers shared by authentication and cryptographic integrations. */
 public class CryptoUtils {
 
+    /** Prevents construction of this stateless utility class. */
     private CryptoUtils() {}
 
     /**

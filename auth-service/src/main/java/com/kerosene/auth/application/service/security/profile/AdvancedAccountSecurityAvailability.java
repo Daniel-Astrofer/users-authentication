@@ -12,21 +12,31 @@ public class AdvancedAccountSecurityAvailability {
     /** Whether this build is configured to accept advanced account security modes. */
     private final boolean advancedModesEnabled;
 
-    /** Captures the deployment's advanced-mode feature flag. */
-    /** @param advancedModesEnabled value of account.security.advanced-modes-enabled */
+    /**
+     * Captures the deployment's advanced-mode feature flag.
+     *
+     * @param advancedModesEnabled value of {@code account.security.advanced-modes-enabled}
+     */
     public AdvancedAccountSecurityAvailability(
             @Value("${account.security.advanced-modes-enabled:false}") boolean advancedModesEnabled) {
         this.advancedModesEnabled = advancedModesEnabled;
     }
 
-    /** Reports whether advanced modes are enabled. @return configured feature state */
+    /**
+     * Reports whether advanced modes are enabled in this deployment.
+     *
+     * @return configured feature state
+     */
     public boolean isEnabled() {
         return advancedModesEnabled;
     }
 
-    /** Rejects advanced modes when the feature flag is disabled. */
-    /** @param accountSecurityType requested account security mode */
-    /** @throws AuthExceptions.InvalidCredentials when the requested mode is unavailable */
+    /**
+     * Rejects SHAMIR and MULTISIG_2FA when the feature flag is disabled; STANDARD is always allowed.
+     *
+     * @param accountSecurityType requested account security mode
+     * @throws AuthExceptions.InvalidCredentials when an advanced mode is unavailable
+     */
     public void assertSupported(AccountSecurityType accountSecurityType) {
         if (accountSecurityType == AccountSecurityType.SHAMIR
                 || accountSecurityType == AccountSecurityType.MULTISIG_2FA) {

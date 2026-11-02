@@ -15,23 +15,32 @@ public class AuthPasskeyGatewayAdapter implements PasskeyGateway {
     /** Outbound authentication port that performs passkey persistence and lookup. */
     private final AuthPasskeyGateway delegate;
 
-    /** Creates the gateway adapter. */
-    /** @param delegate application output port */
+    /**
+     * Creates the gateway adapter.
+     *
+     * @param delegate application output port that owns passkey persistence
+     */
     public AuthPasskeyGatewayAdapter(AuthPasskeyGateway delegate) {
         this.delegate = delegate;
     }
 
-    /** Delegates credential persistence to the application output port. */
-    /** @param credential credential to persist */
-    /** @return persisted credential */
+    /**
+     * Delegates credential persistence to the application output port.
+     *
+     * @param credential credential to persist
+     * @return persisted credential
+     */
     @Override
     public PasskeyCredential save(PasskeyCredential credential) {
         return delegate.save(credential);
     }
 
-    /** Delegates owner-scoped credential lookup to the application output port. */
-    /** @param userId account identifier */
-    /** @return credentials belonging to the account */
+    /**
+     * Delegates owner-scoped credential lookup to the application output port.
+     *
+     * @param userId account identifier
+     * @return credentials belonging to the account
+     */
     @Override
     public List<PasskeyCredential> findByUserId(Long userId) {
         return delegate.findByUserId(userId);

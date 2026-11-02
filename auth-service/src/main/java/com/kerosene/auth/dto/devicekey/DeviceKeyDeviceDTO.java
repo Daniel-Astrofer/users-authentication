@@ -35,9 +35,10 @@ public record DeviceKeyDeviceDTO(
         LocalDateTime revokedAt,
         int protocolVersion) {
 
-    /** Projects persisted credential metadata into the public device listing without exposing key bytes. */
-    /** @param credential persisted credential entity */
-    /** @return public device DTO containing identity, status, timestamps, and replay counter */
+    /** Projects persisted credential metadata into the public device listing without exposing key bytes.
+     * @param credential persisted credential entity
+     * @return public device DTO containing identity, status, timestamps, and replay counter
+     */
     public static DeviceKeyDeviceDTO from(DeviceKeyCredential credential) {
         return new DeviceKeyDeviceDTO(
                 credential.getCredentialId(),

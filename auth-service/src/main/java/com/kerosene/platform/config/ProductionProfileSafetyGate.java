@@ -15,12 +15,12 @@ import com.kerosene.platform.config.production.ProductionSafetyCheckChain;
  * balance deposit credit and vouchers.
  */
 @Component
-public class ProductionMockProfileCondition implements ApplicationRunner {
+public class ProductionProfileSafetyGate implements ApplicationRunner {
 
     private final ProductionProfileDetector productionProfileDetector;
     private final ProductionSafetyCheckChain productionSafetyCheckChain;
 
-    public ProductionMockProfileCondition(
+    public ProductionProfileSafetyGate(
             ProductionProfileDetector productionProfileDetector,
             ProductionSafetyCheckChain productionSafetyCheckChain) {
         this.productionProfileDetector = productionProfileDetector;

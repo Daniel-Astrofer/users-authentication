@@ -9,12 +9,14 @@ public class StompInboundMessageHandlerChain implements StompMessageHandler {
 
     private final StompMessageHandler chain;
 
-    public StompInboundMessageHandlerChain(JwtServicer jwtServicer) {
+    public StompInboundMessageHandlerChain(JwtServicer jwtServicer,
+            com.kerosene.platform.config.websocket.StompSessionAuthorization sessions) {
         StompTokenResolver tokenResolver = new NativeHeaderStompTokenResolver(null);
 
         this.chain = new ConnectAuthenticationStompMessageHandler(
                 jwtServicer,
                 tokenResolver,
+                sessions,
                 new SubscribeAuthorizationStompMessageHandler(
                         new CommandLoggingStompMessageHandler(null)));
     }

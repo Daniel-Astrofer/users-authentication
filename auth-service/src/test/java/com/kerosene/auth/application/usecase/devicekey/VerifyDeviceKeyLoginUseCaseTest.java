@@ -132,7 +132,7 @@ class VerifyDeviceKeyLoginUseCaseTest {
 
         assertThat(result.status()).isEqualTo(VerifyDeviceKeyLoginUseCase.Status.INACTIVE_ACCOUNT);
         verify(finalizeSignupAccount).ensureUserFinancialsReady(user, null);
-        verify(jwtServicer, never()).generateToken(anyLong());
+        verify(jwtServicer, never()).generateTokenAtCredentialEpoch(anyLong(), org.mockito.ArgumentMatchers.anyCollection(), anyLong());
     }
 
     @Test
@@ -153,7 +153,7 @@ class VerifyDeviceKeyLoginUseCaseTest {
                 startsWith(StartLogin.preAuthKey("")),
                 eq("alice"),
                 eq(StartLogin.PRE_AUTH_TTL_SECONDS));
-        verify(jwtServicer, never()).generateToken(anyLong());
+        verify(jwtServicer, never()).generateTokenAtCredentialEpoch(anyLong(), org.mockito.ArgumentMatchers.anyCollection(), anyLong());
     }
 
     @Test
@@ -166,14 +166,14 @@ class VerifyDeviceKeyLoginUseCaseTest {
         when(deviceKeyService.verifyAuthentication(request, user, credential)).thenReturn(9L);
         when(deviceKeyRepository.advanceCounter(eq("credential-1"), eq(42L), eq(9L), any(LocalDateTime.class)))
                 .thenReturn(1);
-        when(jwtServicer.generateToken(42L)).thenReturn("jwt-token");
+        when(jwtServicer.generateTokenAtCredentialEpoch(42L, java.util.List.of("USER"), 0L)).thenReturn("jwt-token");
 
         VerifyDeviceKeyLoginUseCase.Result result = useCase.execute(request);
 
         assertThat(result.status()).isEqualTo(VerifyDeviceKeyLoginUseCase.Status.AUTHENTICATED);
         assertThat(result.data()).isEqualTo("42 jwt-token");
         verify(finalizeSignupAccount).ensureUserFinancialsReady(user, null);
-        verify(jwtServicer).generateToken(42L);
+        verify(jwtServicer).generateTokenAtCredentialEpoch(42L, java.util.List.of("USER"), 0L);
     }
 
     private DeviceKeyVerifyRequest request(String credentialId, String username) {

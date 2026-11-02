@@ -21,21 +21,29 @@ import java.io.InputStream;
  */
 public class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
 
+    /** Immutable snapshot of the request body captured when this wrapper is created. */
     private final byte[] cachedBody;
 
+    /** Reads and caches the underlying request body for repeatable downstream access.
+     * @param request original servlet request
+     * @throws IOException if reading the original body fails
+     */
     public CachedBodyHttpServletRequest(HttpServletRequest request) throws IOException {
         super(request);
         InputStream requestInputStream = request.getInputStream();
         this.cachedBody = StreamUtils.copyToByteArray(requestInputStream);
     }
 
-    /**
-     * @return The raw cached request body bytes; never {@code null}.
+    /** Returns the original body bytes captured by this wrapper.
+     * @return cached bytes, including an empty array for an empty body
      */
     public byte[] getCachedBody() {
         return cachedBody;
     }
 
+    /** Returns a fresh stream over the cached body for each read attempt.
+     * @return repeatable servlet input stream
+     */
     @Override
     public ServletInputStream getInputStream() {
         return new CachedBodyServletInputStream(this.cachedBody);
@@ -48,11 +56,15 @@ public class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
 
         private final InputStream delegate;
 
+        /** Creates an input stream backed by the supplied cached bytes.
+         * @param body cached request bytes
+         */
         public CachedBodyServletInputStream(byte[] body) {
             this.delegate = new ByteArrayInputStream(body);
         }
 
         @Override
+        /** Reports whether all cached bytes have been consumed. */
         public boolean isFinished() {
             try {
                 return delegate.available() == 0;
@@ -62,16 +74,24 @@ public class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
         }
 
         @Override
+        /** Always reports ready because reads are served from memory. */
         public boolean isReady() {
             return true;
         }
 
         @Override
+        /** Rejects asynchronous callbacks, which this memory-backed stream does not support.
+         * @param readListener listener requested by the servlet container
+         */
         public void setReadListener(ReadListener readListener) {
             throw new UnsupportedOperationException("Async not supported for cached body stream");
         }
 
         @Override
+        /** Reads the next cached byte, or -1 when the body is exhausted.
+         * @return next byte value or -1 at end of stream
+         * @throws IOException if the backing stream reports a read error
+         */
         public int read() throws IOException {
             return delegate.read();
         }
