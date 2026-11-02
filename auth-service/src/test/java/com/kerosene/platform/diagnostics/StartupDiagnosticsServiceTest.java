@@ -86,7 +86,7 @@ class StartupDiagnosticsServiceTest {
                 .withProperty("kfe.internal.base-url", "https://kfe:8443")
                 .withProperty("kfe.remote.base-url", "https://kfe:8443")
                 .withProperty("kfe.vaultmesh.enabled", "false")
-                .withProperty("kfe.vaultmesh.base-url", "http://127.0.0.1:7701")
+                .withProperty("kfe.vaultmesh.base-url", "https://127.0.0.1:7801")
                 .withProperty("lightning.lnd.enabled", "true")
                 .withProperty("lightning.lnd.host", "lnd-bitcoind")
                 .withProperty("lightning.lnd.port", "10009")

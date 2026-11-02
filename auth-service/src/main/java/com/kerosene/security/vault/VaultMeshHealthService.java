@@ -45,7 +45,7 @@ public class VaultMeshHealthService {
             @Value("${kfe.vaultmesh.enabled:false}") boolean enabled,
             @Value("${kfe.vaultmesh.mesh-only:false}") boolean meshOnly,
             @Value("${kfe.mpc.signing-enabled:true}") boolean mpcSigningEnabled,
-            @Value("${kfe.vaultmesh.base-url:http://127.0.0.1:7701}") String baseUrl,
+            @Value("${kfe.vaultmesh.base-url:https://127.0.0.1:7801}") String baseUrl,
             @Value("${kfe.vaultmesh.api-token:}") String apiToken) {
         this.objectMapper = objectMapper;
         this.settlementPort = settlementPort;
@@ -236,7 +236,7 @@ public class VaultMeshHealthService {
         while (trimmed.endsWith("/")) {
             trimmed = trimmed.substring(0, trimmed.length() - 1);
         }
-        return trimmed.isEmpty() ? "http://127.0.0.1:7701" : trimmed;
+        return trimmed.isEmpty() ? "https://127.0.0.1:7801" : trimmed;
     }
 
     private static String safeMessage(Exception exception) {
